@@ -1,0 +1,75 @@
+
+model{
+for (j in 1:Y){ # years
+    # positive cover
+    a[j] <- mu[j] * phi[j]
+    b[j] <- (1 - mu[j]) * phi[j]
+    cPos[j] ~ dbeta(a[j], b[j]) T(1e-16,0.9999999999999999) # random draw of cPos for that year, based on data-informed beta distribution
+  for (i in 1:N){ # plots
+      # ZI cover
+      C[i,j] <- z[i,j] * cPos[j] # combine random draw of cPos for year j with estimated plot-specific occupancy
+      
+      # occupancy
+      z[i,j] ~ dbern(psi[i,j]) # true PA state of a plot within a year depends on occupancy probability psi
+      logit(psi[i,j]) <- m[j] # year random intercept on occupancy prob (same as Sparta)
+      #logit(psi[i,j]) <- a0 # single intercept
+      #psi[i,j] ~ dbeta(1,1)
+      } # end of plots loop
+} # end of years loop
+
+## Derived values from state model
+for (j in 1:Y){ # number of years
+    annOcc[j] <- (sum(z[,j]))/N # annual occupancy
+    mC[j] <- mean(C[,j]) # annual mean cover, including zeros
+}
+avgOcc <- mean(annOcc[]) # average annual occupancy
+
+## Plot positive covers
+for(k in 1:n.Plot.pos){ 
+    cposCens[k] ~ dinterval(cposLatent[k], lims[k,])
+    cposLatent[k] ~ dbeta(a[year[k]], b[year[k]]) T(1e-16,0.9999999999999999) # recorded cover when present follows beta distribution
+}
+
+## Observation model for all plot visits ([within-year] detection within plots)
+#mY <- mean(y[]) # mean detected cover across all years for mean-centring
+for (a in 1:V2){
+    x[a] ~ dbern(py[a]) # detectability influences detection
+    py[a] <- z[plotZ[a], yearZ[a]] * p.dec[a] # true state x detectability
+    p.dec[a] <- min(max(1e-16, p.Dec[a]), 0.9999999999999999) # trick to stop numerical problems
+    
+    # detectability model
+    #logit(p.Dec[a]) <- gamma0c + gamma1 * (y[a] - mY) # centering reduces gamma0c/gamma1 correlation
+    logit(p.Dec[a]) <- gamma0 + gamma1 * yOrig[a]
+    #logit(p.Dec[a]) <- gamma0 # without dependency of detection on abundance (requires changes to L236 and prior as well)
+    yOrig[a] ~ dunif(0,10)
+}
+# only required if you are including detected cover in estimate of detectability
+#gamma0 <- gamma0c - gamma1 * mY # Recover original intercept
+
+## Priors!
+# Cover
+phi[1] ~ dt(0, 0.01, 1)T(0,)
+mu[1] ~ dbeta(1, 1)
+for (j in 2:Y){
+  mInt[j] ~ dnorm(logit(mu[j-1]), 4)
+  mu[j] <- ilogit(mInt[j]) # mean follows low-variation random walk on logit-normal scale (sd = 0.5, so tau = 4)
+  phi[j] ~ dt(0, 0.01, 1)T(0,) # phi's are independent half-Cauchy priors
+}
+
+# Detection model
+mean.p ~ dbeta(1,1) # broad intercept on prob scale
+gamma0 <- logit(mean.p) # transformed # note that this requires tweak to initial values
+gamma1 ~ dnorm(0, 4) # informative prior to help with quasi-complete separation in logistic regression
+
+# Priors for state model for occupancy when included (currently with random walk prior)
+mean.m ~ dbeta(1,1)
+m[1] <- logit(mean.m)
+for(j in 2:Y){
+  m[j] ~ dnorm(m[j-1], 4) # m is the annual estimate of the random year effect
+  #m[j] ~ dnorm(m[j-1], tau.m) # m is the annual estimate of the random year effect
+}  
+#tau.m <- 1/pow(sd.m, 2)
+#sd.m ~ dt(0, 0.001, 1)T(0,)
+
+} ## END MODEL
+

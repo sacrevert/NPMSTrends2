@@ -1,0 +1,81 @@
+
+model{
+for (j in 1:Y){ # years
+    # positive cover
+    a[j] <- mu[j] * phi[j]
+    b[j] <- (1 - mu[j]) * phi[j]
+    cPos[j] ~ dbeta(a[j], b[j]) T(1e-16,0.9999999999999999) # random draw of cPos for that year, based on data-informed beta distribution
+  for (i in 1:N){ # plots
+      # ZI cover
+      C[i,j] <- z[i,j] * cPos[j] # combine random draw of cPos for year j with estimated plot-specific occupancy
+      
+      # occupancy
+      z[i,j] ~ dbern(psi[i,j]) # true PA state of a plot within a year depends on occupancy probability psi
+      #logit(psi[i,j]) <- m[j] # year random intercept on occupancy prob (same as Sparta)
+      psi[i,j] ~ dbeta(1,1)
+      } # end of plots loop
+} # end of years loop
+
+## Derived values from state model
+for (j in 1:Y){ # number of years
+    annOcc[j] <- (sum(z[,j]))/N # annual occupancy
+    mC[j] <- mean(C[,j]) # annual mean cover, including zeros
+    mPsi[j] <- mean(psi[,j]) # annual mean occupancy prob
+}
+avgOcc <- mean(annOcc[]) # average annual occupancy
+
+## Plot positive covers
+for(k in 1:n.Plot.pos){ 
+    cposCens[k] ~ dinterval(cposLatent[k], lims[k,])
+    cposLatent[k] ~ dbeta(a[year[k]], b[year[k]]) T(1e-16,0.9999999999999999) # recorded cover when present follows beta distribution
+}
+
+## Observation model for all plot visits ([within-year] detection within plots)
+for (a in 1:V2){
+    x[a] ~ dbern(py[a]) # detectability influences detection
+    py[a] <- z[plotZ[a], yearZ[a]] * p.dec[a] # true state x detectability
+    p.dec[a] <- min(max(1e-16, p.Dec[a]), 0.9999999999999999) # trick to stop numerical problems
+    
+    # detectability model: g1 is cover effect, g2 is grazing effect (with missing values), g3 is survey level (no missing values)
+    ##############################################################
+    ## Currently breaks here when you add in categorical predictor g3
+    ##############################################################
+    logit(p.Dec[a]) <-g0
+    #Xbeta[a] <- g0# + g3[x3[a]] #+ g2[x2[a]] 
+    #yOrig[a] ~ dunif(0,10) # this could be improved using the Wilson/Irvine approach (i.e. imputing new values where missing, 
+                           # rather than relying on noise-inducing uniform draws)
+    #x2[a] ~ dcat(pi) # (cover missing values for g2, or add in zeros?)
+}
+
+### Priors ###
+## Intercept for state model for occupancy
+mean.m ~ dbeta(1,1)
+for(j in 1:Y){
+  m[j] ~ dnorm(logit(mean.m), tau.m)
+}  
+tau.m <- 1/pow(sd.mA, 2)
+sd.mA <- sd.m + .1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
+sd.m ~ dt(0, 0.1, 1)T(0,)
+
+## Cover (with random walk prior)
+phi[1] ~ dt(0, 0.01, 1)T(0,)
+mu[1] ~ dbeta(1, 1)
+for (j in 2:Y){
+  mInt[j] ~ dnorm(logit(mu[j-1]), 4)
+  mu[j] <- ilogit(mInt[j]) # mean follows low-variation random walk on logit-normal scale (sd = 0.5, so tau = 4)
+  phi[j] ~ dt(0, 0.1, 1)T(0,) # phi's are independent half-Cauchy priors (make tau = 0.1 given likely values of a/b)
+}
+
+## Detection model
+mean.p ~ dbeta(1,1) # broad intercept on prob scale
+g0 <- logit(mean.p) # transformed # note that this requires tweak to initial values
+#g1 ~ dnorm(0, 1) # weakly informative prior to help with quasi-complete separation in logistic regression
+
+# Hierarchical prior for survey levels
+for (j in 1:g3Levs) { g3[j] ~ dnorm(0, g3tau) }
+g3tau <- 1/pow(sd.g3A, 2)
+sd.g3A <- sd.g3 + .1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
+sd.g3 ~ dt(0, 0.01, 1)T(0,)
+
+} ## END MODEL
+
