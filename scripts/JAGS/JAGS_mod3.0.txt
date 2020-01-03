@@ -43,7 +43,7 @@ for (a in 1:V2){
     logit(p.Dec[a]) <- g0 + g1*yOrig[a] + g3[x3[a]] + g2[x2[a]] 
     yOrig[a] ~ dunif(0,10) # this could be improved using the Wilson/Irvine approach (i.e. imputing new values where missing, 
                            # rather than relying on noise-inducing uniform draws)
-    x2[a] ~ dcat(pi) # (cover missing values for g2, or add in zeros?)
+    x2[a] ~ dcat(pi) # missing values for grazing info (or assume 0)
 }
 
 ### Priors ###

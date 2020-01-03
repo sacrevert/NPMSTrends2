@@ -191,7 +191,6 @@ for (j in 1:Y){ # years
       # occupancy
       z[i,j] ~ dbern(psi[i,j]) # true PA state of a plot within a year depends on occupancy probability psi
       logit(psi[i,j]) <- m[j] # year random intercept on occupancy prob (same as Sparta)
-      #psi[i,j] ~ dbeta(1,1)
       } # end of plots loop
 } # end of years loop
 

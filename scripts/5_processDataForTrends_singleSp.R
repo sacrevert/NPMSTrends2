@@ -291,10 +291,13 @@ jagsModel <- jags.model(file= 'scripts/JAGS/JAGS_mod3.0.txt', data = Data, inits
 
 # Specify parameters for which posterior samples are saved
 para.names <- c('mC', 'mPsi', 'mu', 'annOcc', 'avgOcc')
+para.names <- c('mC')
 # Continue the MCMC runs with sampling
 samples <- coda.samples(jagsModel, variable.names = para.names, n.iter = 500)
 ## Inspect results
-summary(samples)
+out <- summary(samples)
+mu_se <- out$stat[,c(1,3)] #make columns for mean and se
+#save(samples, file = "outputs/")
 gelman.diag(samples)
 plot(samples)
 
