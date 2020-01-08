@@ -27,7 +27,7 @@ getNpmsData_PlotsSamples_v1.1 <- function(dsn = "PostgreSQL30", user = "brc_read
                                                                       "on co.sample_id = s.id",
                                                                       "left join indicia.surveys su",
                                                                       "on su.id = s.survey_id",
-                                                                      "where s.date_start between '2015-01-01' and '2018-12-31'",
+                                                                      "where s.date_start between '2015-01-01' and '2019-12-31'",
                                                                       "and s.survey_id in (87,154,155)",
                                                                       "group by s.id, su.title",
                                                                       ") occs",
@@ -40,7 +40,7 @@ getNpmsData_PlotsSamples_v1.1 <- function(dsn = "PostgreSQL30", user = "brc_read
                                                                       "and tt.id = sav.int_value",
                                                                       "and t.id = tt.term_id",
                                                                       "and s.survey_id in (87,154,155)",
-                                                                      "and s.date_start between '2015-01-01' and '2018-12-31'",
+                                                                      "and s.date_start between '2015-01-01' and '2019-12-31'",
                                                                       "and int_value is not null",
                                                                       "and sa.termlist_id is not null",
                                                                       "and sa.caption in ('NPMS Habitat', 'NPMS Grazing', 'NPMS Management')",
@@ -71,7 +71,7 @@ getNpmsData_SamplesSpecies <- function(dsn = "PostgreSQL30", user = "brc_read_on
                                                                                     "LEFT join indicia.occurrence_attribute_values oav on oav.occurrence_id = co.id and oav.deleted=false",
                                                                                     "LEFT join indicia.occurrence_attributes oa on oa.id=oav.occurrence_attribute_id",
                                                                                     "AND oa.id = 104 and oav.deleted=false Where co.survey_id in (87) and co.training = 'f'",
-                                                                                    "and co.date_start between '2015-01-01' and '2018-12-31'",
+                                                                                    "and co.date_start between '2015-01-01' and '2019-12-31'",
                                                                                     "and co.record_status in ('V','C')", ## exclude rejected data
                                                                                     "group by co.id, co.sample_id, co.date_start, co.preferred_taxon, co.taxa_taxon_list_external_key, oav.int_value, co.record_status, co.sensitivity_precision;"))
                                                                                   temp2 <- RODBC::sqlQuery(channel, paste( ## Indicator and Inventory data
@@ -81,7 +81,7 @@ getNpmsData_SamplesSpecies <- function(dsn = "PostgreSQL30", user = "brc_read_on
                                                                                     "LEFT join indicia.occurrence_attributes oa on oa.id=oav.occurrence_attribute_id AND oa.id = 214 and oav.deleted=false",
                                                                                     "LEFT join indicia.termlists_terms tt on tt.id=oav.int_value and tt.deleted=false",
                                                                                     "LEFT join indicia.terms terms on terms.id = tt.term_id AND terms.deleted=false Where co.survey_id in (154,155) and co.training = 'f'",
-                                                                                    "and co.date_start between '2015-01-01' and '2018-12-31'",
+                                                                                    "and co.date_start between '2015-01-01' and '2019-12-31'",
                                                                                     "and co.record_status in ('V','C')", ## exclude rejected data
                                                                                     "group by co.id, co.sample_id, co.date_start, co.preferred_taxon, co.taxa_taxon_list_external_key, terms.term, co.record_status, co.sensitivity_precision;"))
                                                                                   temp3 <- rbind(temp, temp2[-1,]) ## rbind but remove header from second file

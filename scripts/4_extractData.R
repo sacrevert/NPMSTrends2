@@ -22,13 +22,13 @@ source(file = "scripts/3_processDataFuns.R")
 #grassSamples <- getSamples(habsList = grasslands)
 #Achi_mill_PAN <- spSamplePA(samples = grassSamples, species = "Achillea millefolium")
 #head(Achi_mill_PAN); tail(Achi_mill_PAN)
-## Save dataset (20.09.2018)
-#save(Achi_mill_PAN, file = "data/Achi_mille_grassSamples_20180920.Rdata")
+#load(file = "data/Achi_mille_grassSamples_2020-01-03.Rdata")
 ##
 
 ## Following can be used if database extraction not run
 #load(file = "data/npms1518_SamplesSpecies_2019-09-05.Rdata.Rdata")
 #load(file = "data/npms1518_PlotsSamples_2019-09-05.Rdata.Rdata")
+
 
 ##############################################################
 ############ Generalised approach using functions ############
@@ -49,12 +49,13 @@ focalSpp <- selectSp(bsh = "Lowland grassland")
 sppDatList <- list()
 # Function will print names of error-causing species to screen
 # error causing species will currently just be a character element to the list, rather than a nested df
-sppDatList <- lapply(focalSpp, function(x) spSamplePA_v1.1(samples = habSamps, species = x))
+sppDatList <- lapply(focalSpp, function(x) spSamplePA_v1.1(samples = habSamps, species = x)) # no data species are printed to screen
 names(sppDatList) <- focalSpp
 ## Species with no data for reference
 excludedSpp <- unlist(lapply(seq_along(sppDatList), function(i) ifelse(which(!is.data.frame(sppDatList[[i]]))==1, names(sppDatList)[i], NULL)))
 ##
-save(sppDatList, excludedSpp, file = "outputs/grasslandsEg_09 09 2019.Rdata") # this now has cutting/mowing and grazing data, and is unified to indicator names
+# this now has cutting/mowing and grazing data, and is unified to indicator names
+save(sppDatList, excludedSpp, file = paste("outputs/grasslandsEg_", as.character(Sys.Date()), ".Rdata", sep = ""))
 #load(file = "outputs/grasslandsEg_09 09 2019.Rdata")
 #load(file = "outputs/grasslandsEg_26 03 2019.Rdata") # previous run (first indicator project) for comparison
 #####

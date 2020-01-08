@@ -6,13 +6,13 @@
 
 #source(file = "scripts/2_getDataFromIndiciaExec.R")
 ## Load data (previously extracted using functions in script 1)
-## No longer needed, as these objects will be in the global environment as a result of sourcing script "2_getData..."
-load(file = "data/npms1518_SamplesSpecies_2019-09-05.Rdata")
-load(file = "data/npms1518_PlotsSamples_2019-09-05.Rdata")
+## Or will be in the global environment if sourcing script "2_getData..."
+load(file = "data/npms_SamplesSpecies_2020-01-03.Rdata")
+load(file = "data/npms_PlotsSamples_2020-01-03.Rdata")
 
 
 ## Read in the official list of indicators with indicia preferred names and TVKs
-# file has one row for every species::fine-scale habitat association
+# file has one row for every species x fine-scale habitat association
 # broad habitat lists can be derived from another column indicating fine::broad habitat associations
 inds <- read.csv(file = "data/npmsIndicatorsIndicia_Aug2018.csv", header = T, stringsAsFactors = F)
 domins <- read.csv(file = "data/dominScores.csv", header = T, stringsAsFactors = F)
@@ -29,7 +29,7 @@ domins <- read.csv(file = "data/dominScores.csv", header = T, stringsAsFactors =
 ### Note that this will need updating every year as new recorded names are added to the indicia export ####
 ###########################################################################################################
 unifyNames <- read.csv(file = "data/unifyNames.csv", header = T, stringsAsFactors = F)
-npms15_18spp <- merge(npms15_18spp, unifyNames, by.x = "preferred_taxon", by.y = "nameRec", all.x = T, all.y = F)
+npms_spp <- merge(npms_spp, unifyNames, by.x = "preferred_taxon", by.y = "nameRec", all.x = T, all.y = F)
 
 ## Process fie/broad-scale indicator data for later function
 head(inds)
@@ -39,7 +39,7 @@ indsB <- aggregate(guidanceSpecies ~ indiciaName + indiciaPrefTvk + broad.scale_
                    data = inds, function(x) length(x))
 indsF <- indsF[,-(7)]; indsB <- indsB[,-(7)]; # delete the unnecessary aggregated columns
 
-## These steps are all about making a lookup table that can later tell us, for every posisble indicator/wildflower v. broad/fine habitat combination,
+## These steps are all about making a lookup table that can later tell us, for every possible indicator/wildflower v. broad/fine habitat combination,
 # whether species X is on the list for that combination
 indsF$combinedI <- ifelse(indsF$indicator == "y", paste(indsF$fine.scale_habitat,", Indicator survey", sep = ""), NA)
 indsF$combinedW <- ifelse(indsF$wildflower == "y", paste(indsF$fine.scale_habitat,", Wildflower survey", sep = ""), NA)
@@ -61,23 +61,25 @@ indsB_minimal <- rbind(indsB_tmp1, indsB_tmp2)
 indsLookup <- rbind(indsF_minimal, indsB_minimal) # combine
 
 ## function to select the relevant samples for any given set of habitats
-getSamples <- function(habsList){ temp <- merge(npms15_18spp, npms15_18plots, by.x = 'sample_id', by.y = "sample", all.x = T, all.y = F)
+getSamples <- function(habsList){ temp <- merge(npms_spp, npms_plots, by.x = 'sample_id', by.y = "sample", all.x = T, all.y = F)
                                   temp2 <- temp[temp$surv_habitat %in% habsList,]
                                   return(temp2)
 }
+## 2019 addition:
 # Add unique() just to remove any database duplicates (one only for graze dat)
-grazeDat <- unique(npms15_18plots[npms15_18plots$caption == "NPMS Grazing",])
+grazeDat <- unique(npms_plots[npms_plots$caption == "NPMS Grazing",])
 names(grazeDat)[6] <- "grazing"
-mowDat <- unique(npms15_18plots[npms15_18plots$surv_habitat == "Cutting / mowing",])
+mowDat <- unique(npms_plots[npms_plots$surv_habitat == "Cutting / mowing",])
 names(mowDat)[6] <- "cutting"
 
 # END function
 ##### 03 09 2019: at some point I will need to harmonise the names that are taken directly from the database, e.g., at the moment infraspecific taxa etc.
-##### within indicator taxa will be ignored.
+##### within indicator taxa will be ignored. (03 01 2020: hang on, I did the unify names bit above, so this should be OK if that lookup list is up-to-date,
+##### I think me from 03 09 2019 overlooked that step)
 
 ## Grasslands examples
-#grasslands <- c("Neutral pastures and meadows", "Dry acid grassland", "Dry calcareous grassland", "Neutral damp grassland", "Lowland grassland")
-#grassSamples <- getSamples(habsList = grasslands)
+grasslands <- c("Neutral pastures and meadows", "Dry acid grassland", "Dry calcareous grassland", "Neutral damp grassland", "Lowland grassland")
+grassSamples <- getSamples(habsList = grasslands)
 #
 
 ## Then process the filtered data so that species abundance information is as it should be (i.e. present/absent/NA)
@@ -132,10 +134,10 @@ names(mowDat)[6] <- "cutting"
 spSamplePA_v1.1 <- function(samples, species){ tryCatch(
     {temp <- aggregate(UnifiedPlusInd ~ sample_id + date, data = samples, function(x) max(ifelse(x == species, 1, 0)))
     presence <- temp[temp$UnifiedPlusInd == 1,] # samples containing the taxon of interest
-    presSamps <- merge(presence, npms15_18plots[npms15_18plots$caption == "NPMS Habitat",], by.x = "sample_id", by.y = "sample", all.x = T, all.y = F) # useful for subsequent rbind
+    presSamps <- merge(presence, npms_plots[npms_plots$caption == "NPMS Habitat",], by.x = "sample_id", by.y = "sample", all.x = T, all.y = F) # useful for subsequent rbind
     presSamps$combination <- paste(presSamps$surv_habitat,", ",presSamps$title, sep = "") # useful for subsequent rbind
     absence <- temp[temp$UnifiedPlusInd == 0,] # samples NOT containing the taxon of interest (but are these 0 or NA?)
-    absSamps <- merge(absence, npms15_18plots[npms15_18plots$caption == "NPMS Habitat",], by.x = "sample_id", by.y = "sample", all.x = T, all.y = F) # habitat/level info for every sample
+    absSamps <- merge(absence, npms_plots[npms_plots$caption == "NPMS Habitat",], by.x = "sample_id", by.y = "sample", all.x = T, all.y = F) # habitat/level info for every sample
     absSamps$combination <- paste(absSamps$surv_habitat,", ",absSamps$title, sep = "") # create column for lookup to indsLookup
     indsLookup_fil <- indsLookup[indsLookup$indiciaName == species,]
     absSamps_AN <- merge(absSamps, indsLookup_fil, by.x = "combination", by.y = "combined", all.x = T, all.y = F)# absent or NA indicator
@@ -148,7 +150,7 @@ spSamplePA_v1.1 <- function(samples, species){ tryCatch(
     samples_PAN$PAN <- as.numeric(samples_PAN$PAN) 
     # add in domins and dates etc. from original sample/species data
     ## change here from v1.0 (use 'UnifiedPlusInd' rather than original "preferred_taxon")
-    samples_PAN <- merge(samples_PAN, npms15_18spp[npms15_18spp$UnifiedPlusInd == species,], by.x = "sample_id", by.y = "sample_id", all.x = T, all.y = F)
+    samples_PAN <- merge(samples_PAN, npms_spp[npms_spp$UnifiedPlusInd == species,], by.x = "sample_id", by.y = "sample_id", all.x = T, all.y = F)
     samples_PAN$domin <- ifelse(samples_PAN$PAN == 0, 0, samples_PAN$domin)
     samples_PAN <- merge(samples_PAN, domins, by.x = "domin", by.y = "dominOrig", all.x = T, all.y = F)
     samples_PAN <- merge(samples_PAN, grazeDat[,c("sample","grazing")], by.x = "sample_id", by.y = "sample", all.x = T, all.y = F) # add grazing data
@@ -160,9 +162,9 @@ spSamplePA_v1.1 <- function(samples, species){ tryCatch(
 }
 
 ## Let's see if it works! (looks ok - 05 09 2019)
-#grasslands <- c("Neutral pastures and meadows", "Dry acid grassland", "Dry calcareous grassland", "Neutral damp grassland", "Lowland grassland")
-#grassSamples <- getSamples(habsList = grasslands)
-#Achi_mill_PAN <- spSamplePA_v1.1(samples = grassSamples, species = "Achillea millefolium") # Seems good
-#save(Achi_mill_PAN, file = "data/Achi_mille_grassSamples_20190909.Rdata")
+grasslands <- c("Neutral pastures and meadows", "Dry acid grassland", "Dry calcareous grassland", "Neutral damp grassland", "Lowland grassland")
+grassSamples <- getSamples(habsList = grasslands)
+Achi_mill_PAN <- spSamplePA_v1.1(samples = grassSamples, species = "Achillea millefolium") # Seems good (now 3979 rows)
+save(Achi_mill_PAN, file = paste("data/Achi_mille_grassSamples_", as.character(Sys.Date()), ".Rdata", sep = ""))
 #head(Achi_mill_PAN)
 #load(file = "data/Achi_mille_grassSamples_20180920.Rdata") # old data (trends proj 1) for comparison

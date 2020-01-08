@@ -5,7 +5,7 @@
 # 09.01.2019
 rm(list=ls())
 # v0 -- original version
-# v1 -- amnend function to remove all plots with no known states at time of processing
+# v1 -- amend function to remove all plots with no known states at time of processing
 ######################################
 list.of.packages <- c("R2jags", "dplyr")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
@@ -14,11 +14,10 @@ library(R2jags) ## obviously requires that JAGS (preferably 4.3.0) is installed
 library(dplyr)
 
 # files for development
-load(file = "outputs/grasslandsEg_26 03 2019.Rdata") # load saved files from 4_extractData.R
+load(file = "outputs/grasslandsEg_2020-01-06.Rdata") # load saved files from 4_extractData.R
 
-## Helper function (deletes plots without any known states)
-#x %>% group_by(plot_id) %>% filter(all(!is.na(dominUnify)))
-ilt<-function(x){ # inverse logit function
+## Helper functions
+ilt <- function(x){ # inverse logit function
   exp(x)/(1+exp(x))
 }
 logit <- function(x){ # logit function
@@ -52,11 +51,16 @@ domins <- read.csv(file = "data/dominScores.csv", header = T, stringsAsFactors =
 ##########################################################
 # Reduced list of sample data, excluding species with no data #
 spForMods <- sppDatList[!names(sppDatList) %in% excludedSpp]
-#
-## Function for preparing a species data for JAGS model and running model
-runModels_v1 <- function(i) {
+# head(spForMods[[1]]); names(spForMods[1])
+# x <- spForMods[[1]]
+## Function for preparing species datasets for the JAGS model and then running model
+runModels_v1 <- function(i, file = 'scripts/JAGS/JAGS_mod4.1.txt') {
   x <- spForMods[[i]]
-  x <- (x %>% group_by(plot_id) %>% filter(any(!is.na(dominUnify))) %>% as.data.frame()) # added in v1: keep plots with at least on non NA only
+  x <- (x %>% group_by(plot_id) %>% filter(any(!is.na(dominUnify))) %>% as.data.frame()) # added in v1: keep plots with at least one non NA only
+  if ( is.factor(x$date.x) ) { x$date.x <- as.Date(as.character(x$date.x), format = "%d/%m/%Y") }
+  x$grazing <- as.numeric(factor(x$grazing, levels(x$grazing)[c(2,3,1)]))
+  #levels(x$cutting) <- "cut/mow" # not needed yet!
+  x$title <- factor(x$title, levels(x$title)[c(3,1,2)])
   x$year <- format(x$date.x, "%Y")
   x <- x[order(x$year, x$plot_id), ]
   uniPlots <- unique(x$plot_id) # unique plot IDs - 31/12/2018 = 933
@@ -65,13 +69,15 @@ runModels_v1 <- function(i) {
   N <- length(uniPlots)
   # check that all years are in the range of 2015:System time
   if ( max(unique(format(x$date.x, "%Y"))) > format(Sys.time(), "%Y") ) {
-    print(paste("Error. Years violation: ", names(spForMods)[i]))
+    print(paste("Error. Year violation: ", names(spForMods)[i]))
   } else {
     print(paste("Years ok: ", names(spForMods)[i]))
   }
   Y <- length(unique(format(x$date.x, "%Y")))
   # All Domin data, including zeros
   yOrig <- x$dominUnify
+  x2 <- x$grazing
+  x3 <- x$title
   n.Plot.pos <- length(x$dominUnify[x$dominUnify !='0' & !is.na(x$dominUnify)]) # 300
   cpos.Cens <- rep(1, n.Plot.pos)
   cpos.Latent <- rep(NA, n.Plot.pos)
@@ -124,36 +130,44 @@ runModels_v1 <- function(i) {
   Data <- list(N = N,
                Y = Y,
                n.Plot.pos = n.Plot.pos,
-               cpos.Cens = cpos.Cens, # indicator (is censored?)
-               cpos.Latent = cpos.Latent, # NA values for latent observations
+               cposCens = cpos.Cens, # indicator (is censored?)
+               cposLatent = cpos.Latent, # NA values for latent observations
                lims = lims,
-               plot = plot,
+               #plot = plot,
                year = year,
                V2 = V2,
                plotZ = plotZ,
                yearZ = yearZ,
                y = y,
-               yOrig = yOrig)
+               x2 = x2,
+               x3 = x3,
+               yOrig = yOrig,
+               g2Levs = 3,
+               g3Levs = 3,
+               pi = c(0.33,0.33,0.33))
   zinit <- matrix(1, nrow = N, ncol = Y)
   inits.fn <- function() list(z = zinit,
-                              tau.C = runif(1,1,5),
-                              mu.C = rbeta(1,1,1),
-                              mean.p = rbeta(1,1,1),
-                              #gamma0 = rnorm(1,0,1),
-                              gamma1 = runif(1,-5,5),
-                              # cpos.Latent is approx. mid-points of the categories, used as initial values (dominUnif)
-                              # intervals start from 1 (midpoint for the "zeroth" category not needed for these latent values for positive data)
-                              cpos.Latent = c(0.001,0.025,0.04,0.075,0.175,0.29,0.375,0.625,0.85,0.975)[spPos$dominUnify] )
+                              sd.m = runif(1,0,10),
+                              sd.g2 = runif(1,0,10),
+                              sd.g3 = runif(1,0,10),
+                              mean.m = runif(1,0,1),
+                              mean.p = runif(1,0,1),
+                              mean.g2 = runif(1,0,1),
+                              mean.g3 = runif(1,0,1),
+                              phi = rep(runif(1,1,10), Y),
+                              g1 = runif(1,-5,5),
+                              cposLatent = c(0.001,0.025,0.04,0.075,0.175,0.29,0.375,0.625,0.85,0.975)[spPos$dominUnify] 
+                              )
   #for ref only
   cPos.Init <- c(0.001,0.025,0.04,0.075,0.175,0.29,0.375,0.625,0.85,0.975)[spPos$dominUnify]
-  ### MAKE SURE YOU HAVE THE RIGHT MODEL SCRIPT ###
-  jagsModel <- rjags::jags.model(file= 'scripts/JAGS/JAGS_mod3.0.txt', data = Data, inits = inits.fn, n.chains = 3, n.adapt= 1000)
+  ### MAKE SURE YOU HAVE GIVEN THE RIGHT MODEL SCRIPT TO THE FUNCTION ###
+  jagsModel <- rjags::jags.model(file = file, data = Data, inits = inits.fn, n.chains = 3, n.adapt= 500)
   ### MAKE SURE YOU HAVE THE RIGHT MODEL SCRIPT ###
   # Specify parameters for which posterior samples are saved
   #para.names <- c('psi')
-  para.names <- c('mu.C', 'tau.C', 'gamma0', 'gamma1', 'annOcc', 'cPosAn')
+  para.names <- c('mC', 'mPsi', 'mu', 'annOcc', 'avgOcc')
   # Continue the MCMC runs with sampling
-  samples <- rjags::coda.samples(jagsModel, variable.names = para.names, n.iter = 1500)
+  samples <- rjags::coda.samples(jagsModel, variable.names = para.names, n.iter = 1000)
   ## Inspect results
   out <- summary(samples)
   mu_sd <- out$stat[,1:2] #make columns for mean and sd
@@ -165,7 +179,6 @@ runModels_v1 <- function(i) {
   return(list(x,tableOut,samples))
 }
 
-
 # 11.01.2019
 ### Low occupancy and low cover seems to result in annual average occupancy being always around 50%
 ### confirmed by simulations with avg low cover (0.1) and various levels of avg occupancy
@@ -174,9 +187,9 @@ runModels_v1 <- function(i) {
 # Function runModels_v1() will be applied across the list created in 4_extractData.R (sppDatList), minus excluded species
 sppModels <- list()
 #sppModels <- lapply(seq_along(spForMods[1]), function(i) runModels_v1(i)) # test
-sppModels <- lapply(seq_along(spForMods), function(i) runModels_v1(i))
+sppModels <- lapply(seq_along(spForMods), function(i, file = 'scripts/JAGS/JAGS_mod4.1.txt') runModels_v1(i))
 names(sppModels) <- names(spForMods)
-save(sppModels, file = "outputs/sppRuns/grasslands_26032019_v2_gamma0only.Rdata") # this is the run across all models that used the reduced set of plots (excluding plots with only NAs)
+save(sppModels, file = "outputs/sppRuns/grasslandResults_06012020_FULL.Rdata") # this is the run across all models that used the reduced set of plots (excluding plots with only NAs)
 
 names(sppModels) <- names(spForMods[1])
 #mean(test[grep(rownames(test), pattern = "cPosAn") & regexpr(text = rownames(test), pattern = "(\\d+)\\D*\\z", perl = T),3])
@@ -190,7 +203,7 @@ hist(test[c(1003:1993),1], breaks = 1000)
 ######################################
 ## JAGS model
 ######################################
-sink('scripts/JAGS/JAGS_mod3.0.txt')
+sink('scripts/JAGS/JAGS_mod4.1.txt')
 cat("
 model{
 for (j in 1:Y){ # years
@@ -225,37 +238,59 @@ for(k in 1:n.Plot.pos){
 
 ## Observation model for all plot visits ([within-year] detection within plots)
 for (a in 1:V2){
-    x[a] ~ dbern(py[a]) # detectability influences detection
+    y[a] ~ dbern(py[a]) # detectability influences detection
     py[a] <- z[plotZ[a], yearZ[a]] * p.dec[a] # true state x detectability
     p.dec[a] <- min(max(1e-16, p.Dec[a]), 0.9999999999999999) # trick to stop numerical problems
     
-    # detectability model
-    logit(p.Dec[a]) <- gamma0 + gamma1 * yOrig[a]
-    yOrig[a] ~ dunif(0,10)
+    # detectability model: g1 is cover effect, g2 is grazing effect (with missing values), g3 is survey level (no missing values)
+    ##############################################################
+    ## Currently breaks here when you add in categorical predictor g3
+    ##############################################################
+    logit(p.Dec[a]) <- g0 + g1*yOrig[a] + g2[x2[a]] + g3[x3[a]]
+    yOrig[a] ~ dunif(0,10) # this could be improved using the Wilson/Irvine approach (i.e. imputing new values where missing, 
+                           # rather than relying on noise-inducing uniform draws)
+    x2[a] ~ dcat(pi) # missing values for grazing info (or assume 0)
 }
 
-## Priors!
-# Cover
+### Priors ###
+## Intercept for state model for occupancy
+mean.m ~ dbeta(1,1)
+for(j in 1:Y){
+  m[j] ~ dnorm(logit(mean.m), tau.m)
+}  
+tau.m <- 1/pow(sd.mA, 2)
+sd.mA <- sd.m + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
+sd.m ~ dt(0, 0.1, 1)T(0,)
+
+## Cover (with random walk prior)
 phi[1] ~ dt(0, 0.01, 1)T(0,)
 mu[1] ~ dbeta(1, 1)
 for (j in 2:Y){
   mInt[j] ~ dnorm(logit(mu[j-1]), 4)
   mu[j] <- ilogit(mInt[j]) # mean follows low-variation random walk on logit-normal scale (sd = 0.5, so tau = 4)
-  phi[j] ~ dt(0, 0.01, 1)T(0,) # phi's are independent half-Cauchy priors
+  phi[j] ~ dt(0, 0.1, 1)T(0,) # phi's are independent half-Cauchy priors (make tau = 0.1 given likely values of a/b)
 }
 
-# Detection model
+## Detection model
 mean.p ~ dbeta(1,1) # broad intercept on prob scale
-gamma0 <- logit(mean.p) # transformed # note that this requires tweak to initial values
-gamma1 ~ dnorm(0, 4) # informative prior to help with quasi-complete separation in logistic regression
+g0 <- logit(mean.p) # transformed # note that this requires tweak to initial values
+g1 ~ dunif(-5, 5)
 
-# Intercept for state model for occupancy
-mean.m ~ dbeta(1,1)
-for(j in 1:Y){
-  m[j] ~ dnorm(logit(mean.m), tau.m)
-}  
-tau.m <- 1/pow(sd.m, 2)
-sd.m ~ dt(0, 0.001, 1)T(0,)
+# Hierarchical prior for levels of grazing
+for (j in 1:g2Levs) { g2[j] ~ dnorm(g2mu, g2tau) }
+mean.g2 ~ dbeta(1,1)
+g2mu <- logit(mean.g2)
+g2tau <- 1/pow(sd.g2A, 2)
+sd.g2A <- sd.g2 + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
+sd.g2 ~ dt(0, 0.01, 1)T(0,)
+
+# Hierarchical prior for survey levels
+for (j in 1:g3Levs) { g3[j] ~ dnorm(g3mu, g3tau) }
+mean.g3 ~ dbeta(1,1)
+g3mu <- logit(mean.g3)
+g3tau <- 1/pow(sd.g3A, 2)
+sd.g3A <- sd.g3 + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
+sd.g3 ~ dt(0, 0.01, 1)T(0,)
 
 } ## END MODEL
 ", fill = TRUE)

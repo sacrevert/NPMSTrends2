@@ -11,7 +11,8 @@ library(R2jags)
 library(dplyr)
 ######################################
 
-load(file = "data/Achi_mille_grassSamples_20190909.Rdata") ## pre-processed v. 09 09 2019
+load(file = "data/Achi_mille_grassSamples_2020-01-06.Rdata") ## pre-processed
+Achi_mill_PAN$date.x <- as.Date(as.character(Achi_mill_PAN$date.x), format = "%d/%m/%Y")
 #load("W:/PYWELL_SHARED/Pywell Projects/BRC/_BRC_projects/NPMS/Analyses/2018 08 - Per species trend analyses/r_proj/NPMStrends/data/Achi_mille_grassSamples_20180920.Rdata")
 head(Achi_mill_PAN); tail(Achi_mill_PAN); unique(Achi_mill_PAN$dominUnify)
 # reorder grazing
@@ -47,6 +48,7 @@ domins <- read.csv(file = "data/dominScores.csv", header = T, stringsAsFactors =
 # Change 25.03.2019 -- delete plots for which
 # samples are entirely NA (i.e. no known states)
 ###############################################
+library(dplyr)
 Achi_mill_PAN <- (Achi_mill_PAN %>% 
                     group_by(plot_id) %>%
                     filter(any(!is.na(dominUnify))) # resolves to true if there is at least one non-NA value within a group of plot samples
@@ -60,15 +62,15 @@ uniPlots <- unique(Achi_mill_PAN$plot_id) # unique plot IDs - 31/12/2018 = 933
 plotIndex <- data.frame(plot = uniPlots, index = 1:length(uniPlots))
 N <- length(uniPlots) # number of unique plots
 # check that all years are in the range of 2015:System time
-if ( max(unique(format(Achi_mill_PAN$date.x, "%Y"))) > format(Sys.time(), "%Y") ) {
+if ( max(unique(Achi_mill_PAN$year)) > format(Sys.time(), "%Y") ) {
     print ("error")
 } else {
     print("OK")
 }
 # 
-Y <- length(unique(format(Achi_mill_PAN$date.x, "%Y"))) # number of years
+Y <- length(unique(format(as.Date(Achi_mill_PAN$date.x), "%Y"))) # number of years
 # All Domin data, including zeros and NAs
-yOrig <- Achi_mill_PAN$dominUnify; hist(yOrig)
+yOrig <- Achi_mill_PAN$dominUnify; hist(yOrig, breaks = 10)
 # All grazing data
 x2 <- Achi_mill_PAN$grazing
 # All survey level data
@@ -130,21 +132,21 @@ plotZ <- Achi_mill_PAN$index
 Achi_mill_PAN$year <- as.factor(Achi_mill_PAN$year)
 levels(Achi_mill_PAN$year) <- 1:length(unique(format(Achi_mill_PAN$date.x, "%Y")))
 yearZ <- Achi_mill_PAN$year # an indicator linking a visit to its parent year
-x <- x1 <-  numeric()
+y <- y1 <-  numeric()
 for (i in 1:nrow(Achi_mill_PAN)) {
   if(is.na(Achi_mill_PAN$dominUnify[i])){ 
-    x <- NA
+    y<- NA
     #print(c(i,x)) # this was just for catching a bug
   } else if (Achi_mill_PAN$dominUnify[i]==0) { 
-    x <- 0
+    y <- 0
     #print(c(i,x))
   } else {
-    x <- 1
+    y <- 1
     #print(c(i,x))
   }
-  x1 <- c(x1,x)
+  y1 <- c(y1,y)
 }
-x <- x1 # visit-level detection history (binary)
+y <- y1 # visit-level detection history (binary)
 
 ####################
 ## Send data to JAGS
@@ -161,8 +163,8 @@ Data <- list(N = N,
              V2 = V2,
              plotZ = plotZ,
              yearZ = yearZ,
-             x = x,
-             #x2 = x2, # grazing (with NAs)
+             y = y,
+             x2 = x2, # grazing (with NAs)
              #x2 = c(rep(x = 1:3, times = 788) , 1),
              x3 = x3, # survey level
              yOrig = yOrig,
@@ -194,7 +196,7 @@ cPosInit <- c(0.001,0.025,0.04,0.075,0.175,0.29,0.375,0.625,0.85,0.975)[spPos$do
 ######################################
 ## JAGS model
 ######################################
-sink('scripts/JAGS/JAGS_mod3.0.txt')
+sink('scripts/JAGS/JAGS_mod4.0.txt')
 cat("
 model{
 for (j in 1:Y){ # years
@@ -229,7 +231,7 @@ for(k in 1:n.Plot.pos){
 
 ## Observation model for all plot visits ([within-year] detection within plots)
 for (a in 1:V2){
-    x[a] ~ dbern(py[a]) # detectability influences detection
+    y[a] ~ dbern(py[a]) # detectability influences detection
     py[a] <- z[plotZ[a], yearZ[a]] * p.dec[a] # true state x detectability
     p.dec[a] <- min(max(1e-16, p.Dec[a]), 0.9999999999999999) # trick to stop numerical problems
     
@@ -265,7 +267,7 @@ for (j in 2:Y){
 ## Detection model
 mean.p ~ dbeta(1,1) # broad intercept on prob scale
 g0 <- logit(mean.p) # transformed # note that this requires tweak to initial values
-g1 ~ dunif(-5, 5) 
+g1 ~ dunif(-5, 5)
 
 # Hierarchical prior for levels of grazing
 for (j in 1:g2Levs) { g2[j] ~ dnorm(g2mu, g2tau) }
@@ -287,10 +289,10 @@ sd.g3 ~ dt(0, 0.01, 1)T(0,)
 ", fill = TRUE)
 sink()
 
-jagsModel <- jags.model(file= 'scripts/JAGS/JAGS_mod3.0.txt', data = Data, inits = inits.fn, n.chains = 3, n.adapt= 500)
+jagsModel <- jags.model(file= 'scripts/JAGS/JAGS_mod4.0.txt', data = Data, inits = inits.fn, n.chains = 3, n.adapt= 500)
 
 # Specify parameters for which posterior samples are saved
-para.names <- c('mC', 'mPsi', 'mu', 'annOcc', 'avgOcc')
+#para.names <- c('mC', 'mPsi', 'mu', 'annOcc', 'avgOcc')
 para.names <- c('mC')
 # Continue the MCMC runs with sampling
 samples <- coda.samples(jagsModel, variable.names = para.names, n.iter = 500)
