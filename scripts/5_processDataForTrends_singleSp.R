@@ -256,7 +256,8 @@ sd.mA <- sd.m + 0.1 # see Kruschke page 486 (don't want shrinkage to be too stro
 sd.m ~ dt(0, 0.1, 1)T(0,)
 
 ## Cover (with random walk prior)
-phi[1] ~ dt(0, 0.01, 1)T(0,)
+#phi[1] ~ dt(0, 0.01, 1)T(0,)
+phi[1] ~ dpar(1.5, 0.1) # alpha, c
 mu[1] ~ dbeta(1, 1)
 for (j in 2:Y){
   mInt[j] ~ dnorm(logit(mu[j-1]), 4)
