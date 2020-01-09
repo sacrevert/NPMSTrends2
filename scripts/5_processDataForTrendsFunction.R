@@ -255,7 +255,7 @@ for (a in 1:V2){
 
 ### Priors ###
 ## Intercept for state model for occupancy
-mean.m ~ dbeta(1,1)
+mean.m ~ dbeta(1,1)T(1e-4,0.9999)
 for(j in 1:Y){
   m[j] ~ dnorm(logit(mean.m), tau.m)
 }  
@@ -266,7 +266,7 @@ sd.m ~ dt(0, 0.1, 1)T(0,)
 
 ## Cover (with random walk prior)
 phi[1] ~ dt(0, 0.01, 1)T(0,)
-mu[1] ~ dbeta(1, 1)
+mu[1] ~ dbeta(1, 1)T(1e-4,0.9999)
 for (j in 2:Y){
   mInt[j] ~ dnorm(logit(mu[j-1]), 4)
   mu[j] <- ilogit(mInt[j]) # mean follows low-variation random walk on logit-normal scale (sd = 0.5, so tau = 4)
@@ -274,13 +274,13 @@ for (j in 2:Y){
 }
 
 ## Detection model
-mean.p ~ dbeta(1,1) # broad intercept on prob scale
+mean.p ~ dbeta(1,1)T(1e-4,0.9999) # broad intercept on prob scale
 g0 <- logit(mean.p) # transformed # note that this requires tweak to initial values
 g1 ~ dunif(-5, 5)
 
 # Hierarchical prior for levels of grazing
 for (j in 1:g2Levs) { g2[j] ~ dnorm(g2mu, g2tau) }
-mean.g2 ~ dbeta(1,1)
+mean.g2 ~ dbeta(1,1)T(1e-4,0.9999)
 g2mu <- logit(mean.g2)
 g2tau <- 1/pow(sd.g2A, 2)
 sd.g2A <- sd.g2 + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
@@ -288,7 +288,7 @@ sd.g2 ~ dt(0, 0.01, 1)T(0,)
 
 # Hierarchical prior for survey levels
 for (j in 1:g3Levs) { g3[j] ~ dnorm(g3mu, g3tau) }
-mean.g3 ~ dbeta(1,1)
+mean.g3 ~ dbeta(1,1)T(1e-4,0.9999)
 g3mu <- logit(mean.g3)
 g3tau <- 1/pow(sd.g3A, 2)
 sd.g3A <- sd.g3 + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)

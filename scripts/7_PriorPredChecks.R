@@ -7,6 +7,14 @@ rm(list=ls())
 library(R2jags)
 library(dplyr)
 ######################################
+## Helper functions
+ilt <- function(x){ # inverse logit function
+  exp(x)/(1+exp(x))
+}
+logit <- function(x){ # logit function
+  log(x/(1 - x))
+}
+##
 
 load(file = "data/Achi_mille_grassSamples_2020-01-06.Rdata") ## pre-processed
 Achi_mill_PAN$date.x <- as.Date(as.character(Achi_mill_PAN$date.x), format = "%d/%m/%Y")
@@ -255,7 +263,7 @@ for (a in 1:V2){
 
 ### Priors ###
 ## Intercept for state model for occupancy
-mean.m ~ dbeta(1,1)
+mean.m ~ dbeta(1,1)T(1e-4,0.9999)
 for(j in 1:Y){
   m[j] ~ dnorm(logit(mean.m), tau.m)
 }  
@@ -265,9 +273,10 @@ sd.m ~ dt(0, 0.1, 1)T(0,)
 
 ## Cover (with random walk prior)
 # mu and phi determine a and b parameters of beta distribution
-phi[1] ~ dt(0, 0.01, 1)T(0,)
+#phi[1] ~ dt(0, 0.01, 1)T(0,)
+phi[1] ~ dpar(1.5, 0.1) # alpha, c
 #mu[1] ~ dbeta(1, 1) 
-mu[1] ~ dbeta(1, 1) T(1e-4,0.9999) # PPP change
+mu[1] ~ dbeta(1, 1)T(1e-4,0.9999) # PPP change
 for (j in 2:Y){
   mInt[j] ~ dnorm(logit(mu[j-1]), 4)
   mu[j] <- ilogit(mInt[j]) # mean follows low-variation random walk on logit-normal scale (sd = 0.5, so tau = 4)
@@ -275,13 +284,13 @@ for (j in 2:Y){
 }
 
 ## Detection model
-mean.p ~ dbeta(1,1) # broad intercept on prob scale
+mean.p ~ dbeta(1,1)T(1e-4,0.9999) # broad intercept on prob scale
 g0 <- logit(mean.p) # transformed # note that this requires tweak to initial values
 g1 ~ dunif(-5, 5)
 
 # Hierarchical prior for levels of grazing
 for (j in 1:g2Levs) { g2[j] ~ dnorm(g2mu, g2tau) }
-mean.g2 ~ dbeta(1,1)
+mean.g2 ~ dbeta(1,1)T(1e-4,0.9999)
 g2mu <- logit(mean.g2)
 g2tau <- 1/pow(sd.g2A, 2)
 sd.g2A <- sd.g2 + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
@@ -289,7 +298,7 @@ sd.g2 ~ dt(0, 0.01, 1)T(0,)
 
 # Hierarchical prior for survey levels
 for (j in 1:g3Levs) { g3[j] ~ dnorm(g3mu, g3tau) }
-mean.g3 ~ dbeta(1,1)
+mean.g3 ~ dbeta(1,1)T(1e-4,0.9999)
 g3mu <- logit(mean.g3)
 g3tau <- 1/pow(sd.g3A, 2)
 sd.g3A <- sd.g3 + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
@@ -299,13 +308,13 @@ sd.g3 ~ dt(0, 0.01, 1)T(0,)
 ", fill = TRUE)
 sink()
 
-jagsModel <- jags.model(file= 'scripts/JAGS/JAGS_mod_PPP.txt', data = Data, inits = inits.fn, n.chains = 6, n.adapt= 500)
+jagsModel <- jags.model(file= 'scripts/JAGS/JAGS_mod_PPP.txt', data = Data, inits = inits.fn, n.chains = 6, n.adapt= 1000)
 
 # Specify parameters for which posterior samples are saved
 para.names <- c('mC', 'mPsi', 'mu', 'annOcc', 'avgOcc', 'cPos')
 #para.names <- c('mC')
 # Continue the MCMC runs with sampling
-samples <- coda.samples(jagsModel, variable.names = para.names, thin = 3, n.iter = 6000)
+samples <- coda.samples(jagsModel, variable.names = para.names, thin = 10, n.iter = 5000)
 ## Inspect results
 out <- summary(samples)
 mu_se <- out$stat[,c(1,3)] #make columns for mean and se
@@ -316,13 +325,18 @@ plot(samples)
 ### Visualise ###
 #library(tidybayes)
 library(MCMCvis)
+library(mcmcplots)
 MCMCtrace(samples, 
-          params = c('cPos'),
+          params = c('mu'),
           ISB = FALSE,
           iter = 500,
           ind = TRUE,
           pdf = FALSE)
-
+mcmcplot(samples)
+caterplot(mcmcout = samples, parms = 'cPos')
+denplot(mcmcout = samples, parms = 'mu')
+traplot(samples, parms = 'mu')
+parcorplot(samples, parms = c('cPos', 'mu'))
 
 #############
 #### dt & rbeta stuff -- apparently just using abs doesn't cut it for truncated t distribution!
@@ -351,28 +365,53 @@ MCMCtrace(samples,
 #hist(rbeta(n=1000, shape1 = pA, shape2 = pB))
 
 library(crch) # for truncated students t
-hist(rtt(n = 1000, location = 0, scale = 0.1, df = 1, left = 0, right = Inf), breaks = 10000, xlim = c(0,500))
-hist(rtt(n = 1000, location = 0, scale = 0.001, df = 2, left = 0, right = Inf), breaks = 10000, xlim = c(0,500))
-hist(rtt(n = 1000, location = 0, scale = 0.01, df =1, left = 0, right = Inf), breaks = 10000, xlim = c(0,10))
+#hist(rtt(n = 1000, location = 0, scale = 0.1, df = 1, left = 0, right = Inf), breaks = 10000, xlim = c(0,500))
+#hist(rtt(n = 1000, location = 0, scale = 0.001, df = 2, left = 0, right = Inf), breaks = 10000, xlim = c(0,500))
+#hist(rtt(n = 1000, location = 0, scale = 0.01, df =1, left = 0, right = Inf), breaks = 10000, xlim = c(0,10))
 
 # Visualise priors for cPos using crch
-pMu <- rbeta(n = 1000, shape1 = 1, shape2 = 1)
-pMu2 <- runif(n = 1000, min = 0, max = 1)
+#pMu <- rbeta(n = 1000, shape1 = 1, shape2 = 1)
+#pPhi <- rtt(n = 1000, location = 0, scale = 0.001, df = 2, left = 0, right = Inf) # Kruschke
+##hist(pPhi)
+#pA <- pMu * pPhi
+#pB <- (1 - pMu) * pPhi
+#hist(rbeta(n=1000, shape1 = pA, shape2 = pB))
+#hist(logit(rbeta(n=1000, shape1 = pA, shape2 = pB)))
 
-pPhi <- rtt(n = 1000, location = 0, scale = 0.001, df = 2, left = 0, right = Inf) # Kruschke
+#pPhi <- rtt(n = 1000, location = 0, scale = 0.1, df = 1, left = 0, right = Inf)
 #hist(pPhi)
-pA <- pMu * pPhi
-pB <- (1 - pMu) * pPhi
-hist(rbeta(n=1000, shape1 = pA, shape2 = pB))
+#pA <- pMu * pPhi
+#pB <- (1 - pMu) * pPhi
+#hist(rbeta(n=1000, shape1 = pA, shape2 = pB))
+#hist(logit(rbeta(n=1000, shape1 = pA, shape2 = pB)))
 
-pPhi <- rtt(n = 1000, location = 0, scale = 0.1, df = 1, left = 0, right = Inf)
-hist(pPhi)
-pA <- pMu * pPhi
-pB <- (1 - pMu) * pPhi
-hist(rbeta(n=1000, shape1 = pA, shape2 = pB))
-
+par(mfrow=c(2,2))
+pMu <- rbeta(n = 1000, shape1 = 1, shape2 = 1)
 pPhi <- rtt(n = 1000, location = 0, scale = 0.01, df = 1, left = 0, right = Inf) # Irvine etc.
 #hist(pPhi, breaks = 1000)
-pA <- pMu2 * pPhi
-pB <- (1 - pMu2) * pPhi
-hist(rbeta(n=1000, shape1 = pA, shape2 = pB))
+pA <- pMu * pPhi
+pB <- (1 - pMu) * pPhi
+hist(rbeta(n=1000, shape1 = pA, shape2 = pB), main = "Draws from beta using half-Cauchy \nprior on tau")
+hist(logit(rbeta(n=1000, shape1 = pA, shape2 = pB)), main = "Logit scale")
+
+## Prior on phi much better as just normal
+#pMu <- runif(n = 1000, min = 0, max = 1)
+#pMu <- ilt(rnorm(n = 1000, 0,1))
+#pPhi <- abs(rnorm(n = 1000, mean = 0, sd = 1)) #abs
+#hist(pPhi, breaks = 1000)
+#pA <- pMu * pPhi
+#pB <- (1 - pMu) * pPhi
+#hist(logit(rbeta(n=1000, shape1 = pA, shape2 = pB)))
+#hist(rbeta(n=1000, shape1 = pA, shape2 = pB))
+
+## Suggestions here https://mc-stan.org/docs/2_18/stan-users-guide/reparameterizations.html
+###########################################################################################
+# Only the below formulation result in uniform draws from rbeta
+###########################################################################################
+library(VGAM)
+pPhi <- rpareto(1000, scale = 1.5, shape = 0.1) # scale = alpha, scale = k
+pMu <- rbeta(1000,1,1)
+pA <- pMu * pPhi
+pB <- (1 - pMu) * pPhi
+hist(rbeta(n=1000, shape1 = pA, shape2 = pB), main = "Draws from beta using Pareto \nprior on tau")
+hist(logit(rbeta(n=1000, shape1 = pA, shape2 = pB)), main = "Logit scale")
