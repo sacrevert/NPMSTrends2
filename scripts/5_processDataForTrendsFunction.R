@@ -250,6 +250,7 @@ for (a in 1:V2){
     yOrig[a] ~ dunif(0,10) # this could be improved using the Wilson/Irvine approach (i.e. imputing new values where missing, 
                            # rather than relying on noise-inducing uniform draws)
     x2[a] ~ dcat(pi) # missing values for grazing info (or assume 0)
+    #x3[a] ~ dcat(pi) # missing values for survey level. Only needed for PPP as there are no missing values for this covar in dataset
 }
 
 ### Priors ###
@@ -259,6 +260,7 @@ for(j in 1:Y){
   m[j] ~ dnorm(logit(mean.m), tau.m)
 }  
 tau.m <- 1/pow(sd.mA, 2)
+# Might want to check the following position (sd.m + 0.1) through PPP
 sd.mA <- sd.m + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
 sd.m ~ dt(0, 0.1, 1)T(0,)
 

@@ -44,6 +44,7 @@ for (a in 1:V2){
     yOrig[a] ~ dunif(0,10) # this could be improved using the Wilson/Irvine approach (i.e. imputing new values where missing, 
                            # rather than relying on noise-inducing uniform draws)
     x2[a] ~ dcat(pi) # missing values for grazing info (or assume 0)
+    x3[a] ~ dcat(pi) # missing values for survey level info: there actually aren't any missing, but use this for generating prior predictive checks
 }
 
 ### Priors ###
@@ -57,8 +58,10 @@ sd.mA <- sd.m + 0.1 # see Kruschke page 486 (don't want shrinkage to be too stro
 sd.m ~ dt(0, 0.1, 1)T(0,)
 
 ## Cover (with random walk prior)
+# mu and phi determine a and b parameters of beta distribution
 phi[1] ~ dt(0, 0.01, 1)T(0,)
-mu[1] ~ dbeta(1, 1)
+#mu[1] ~ dbeta(1, 1) 
+mu[1] ~ dbeta(1, 1) T(1e-4,0.9999) # PPP change
 for (j in 2:Y){
   mInt[j] ~ dnorm(logit(mu[j-1]), 4)
   mu[j] <- ilogit(mInt[j]) # mean follows low-variation random walk on logit-normal scale (sd = 0.5, so tau = 4)

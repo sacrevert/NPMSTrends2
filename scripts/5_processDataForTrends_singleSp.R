@@ -304,16 +304,5 @@ gelman.diag(samples)
 plot(samples)
 
 #############
-#### dt stuff
+#### dt stuff -- now in script 7: 7_PriorPredChecks.
 #############
-# below is for dt(0, 0.01, 1)T(0,)
-x <- rnorm(n=1000, 0, sd = sqrt(1/0.1)) # tau = 0.01
-s <- rgamma(n=1000, shape = 1/2, rate = 1/2) # k = 1; shape = rate = k/2 = 1/2
-y <- x/sqrt(s)
-hist(abs(y), breaks = 10000, xlim = c(0,250))
-
-# cf. to used in Kruschke (much lower density around0-50 and much longer RHS tail)
-x <- rnorm(n=1000, 0, sd = sqrt(1/0.001)) # tau = 0.01
-s <- rgamma(n=1000, shape = 2/2, rate = 2/2) # k = 1; shape = rate = k/2 = 1/2
-y <- x/sqrt(s)
-hist(abs(y), breaks = 10000, xlim = c(0,250))

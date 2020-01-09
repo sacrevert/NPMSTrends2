@@ -47,27 +47,29 @@ for (i in 1:dim(simsLNorm[[1]])[1]){ # for each sim
   geoMeans[[i]] <- colMeans(do.call(rbind, lapply(simsLNorm, function(y) log(y[i,]))))
 }
 geoMeansDf <- do.call(rbind, geoMeans)
-# exponentiate geometric means of simulations
+# exponentiate (i.e. back-transform) geometric means of simulations
 meansDf <- exp(na.exclude(geoMeansDf)) # 8 NaNs, ignore for the moment, as only 8 out of 1000
-avgMSI <- t(apply(meansDf, 2, function(y) c(mean(y), sd(y)/sqrt(1000)))) # means and standard errors across the 1000 (well, 992) MSIs (multi-species indicators)
+#avgMSI <- t(apply(meansDf, 2, function(y) c(mean(y), sd(y)/sqrt(992)))) # means and standard errors across the 1000 (well, 992) MSIs (multi-species indicators)
+avgMSI <- t(apply(meansDf, 2, function(y) c(mean(y), sd(y)))) # means and standard deviations across the 1000 (well, 992) MSIs (multi-species indicators)
 avgMSI <- round(avgMSI, digits = 2)
 
-### Plot multi-species indicator
+### Plot multi-species indicator ###
 library(ggplot2)
 ###
 avgMSIDF <-data.frame(avgMSI)
-names(avgMSIDF)[1:2] <- c("MSI", "s.e.")
+names(avgMSIDF)[1:2] <- c("MSI", "s.d.")
 avgMSIDF$Year <- 2015:2019
-avgMSIDF$low <- avgMSIDF$MSI - avgMSIDF$s.e.
-avgMSIDF$high <- avgMSIDF$MSI + avgMSIDF$s.e.
+avgMSIDF$low <- avgMSIDF$MSI - avgMSIDF$s.d.
+avgMSIDF$high <- avgMSIDF$MSI + avgMSIDF$s.d.
 
 ggplot(avgMSIDF, aes_string(x = "Year", y = "MSI")) +
   geom_ribbon(data = avgMSIDF,
               aes_string(group = 1, ymin = "low", ymax = "high"),
-              alpha = 0.2) +
-  geom_line(size = 1, col = "black") +
-  ylab("MSI") +
+              alpha = 0.3) +
+  geom_line(size = 0.5, col = "black") +
+  ylab("MSI (geomean +/- s.d.)") +
   xlab("Year") +
   scale_y_continuous(limits = c(75, 125)) +
+  ggtitle("Lowland grassland") +
   theme(plot.title = element_text(lineheight = .8, face = "bold"),
         legend.position = 'bottom')
