@@ -5,16 +5,9 @@
 # SQL query is also in W:\PYWELL_SHARED\Pywell Projects\BRC\_BRC_projects\NPMS\Analyses\2018 08 - Per species trend analyses\SQL\extractData_v0.0.sql
 
 #rm(list=ls())
-## Check for rstudioapi and install if not available
-list.of.packages <- c("rstudioapi")
-new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
-if(length(new.packages)) install.packages(new.packages)
-library(rstudioapi)
 ##
 #source(file = "scripts/1_getDataFromIndiciaFuns.R") # source SQL functions
 ##
-# Get db password from user (RStudio only)
-password <- rstudioapi::askForPassword("Database password")
 ##
 
 ## Get plot and sample data!
@@ -22,7 +15,8 @@ password <- rstudioapi::askForPassword("Database password")
 ## Slighly nervous about the lack of any increase in plot numbers from 2018 dataset (30,519), but I suppose it has to plateau somewhere, and the dates in the functions have definitely changed!
 # e.g.
 getNpmsData_PlotsSamples_v1.1 # look at stored function
-#npms_plots <- getNpmsData_PlotsSamples_v1.1(password = password)
+#npms_plots <- getNpmsData_PlotsSamples_v1.1(password = password) #6922 for 2019 in theory
+npms_plots <- getNpmsData_PlotsSamples_v1.1(Connection = Connection)
 # manually load as there is an issue with the SQL script not returning the latest (2019) data through RODBC
 #npms_plots <- read.csv(file = "data/npms_PlotsSamples_2020-01-03.csv", header = T, stringsAsFactors = T) #strings as factors T to match db extraction
 #save(npms_plots, file = "data/npms_PlotsSamples_2020-01-03.Rdata")
@@ -30,7 +24,7 @@ load(file = "data/npms_PlotsSamples_2020-01-03.Rdata") # inc. 2019 data
 #save(npms_plots, file = paste("data/npms_PlotsSamples_", as.character(Sys.Date()), ".Rdata", sep = ""))
 
 ## Get taxon data across samples
-#npms_spp <- getNpmsData_SamplesSpecies(password = password)
+npms_spp <- getNpmsData_SamplesSpecies(Connection = Connection)
 #npms_spp <- read.csv(file = "data/npms_SamplesSpecies_2020-01-03.csv", header = T, stringsAsFactors = T)
 #save(npms_spp, file = "data/npms_SamplesSpecies_2020-01-03.Rdata")
 load(file = "data/npms_SamplesSpecies_2020-01-03.Rdata")  # inc. 2019 data

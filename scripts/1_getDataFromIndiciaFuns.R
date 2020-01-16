@@ -8,17 +8,26 @@
 #### Warning! This is slow (11 mins if retrieving data up between 2015-mid-2018) and will get increasingly slower
 #### Need to investigate possible speed-ups/new cache table that runs this automatically on some periodic basis
 ####
-list.of.packages <- c("RODBC")
+list.of.packages <- c("RPostgreSQL", "rstudioapi")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages)
-library(RODBC)
+library(RPostgreSQL)
+library(rstudioapi)
+
+drv <- dbDriver("PostgreSQL")
+pwd <- rstudioapi::askForPassword("Database password")
+# Create a connection to the postgres database
+Connection <- dbConnect(drv,
+                        dbname = "warehouse1",
+                        host = "192.171.199.208", port = 5432,
+                        user = "brc_read_only", password = pwd
+)
 ############# Function to retrieve plot and sample level attributes
 ## Change dates as appropriate! (Lines 23 and 36) ##
 # dsn = "PostgreSQL30"; user = "brc_read_only"
 ## v1.1 incorporates grazing and management data
-getNpmsData_PlotsSamples_v1.1 <- function(dsn = "PostgreSQL30", user = "brc_read_only", password) {   
-                                                                    channel <- RODBC::odbcConnect(dsn = dsn, uid = user, pwd = password)
-                                                                    temp <- RODBC::sqlQuery(channel, paste(
+getNpmsData_PlotsSamples_v1.1 <- function(Connection = Connection) {
+                                                                    select_query <- paste(
                                                                     "select sq.plot_id, sq.monad, occs.sample, occs.title, habs.caption, habs.term as surv_habitat",
                                                                     "from",
 	                                                                    "(select s.id as sample, su.title",
@@ -55,36 +64,37 @@ getNpmsData_PlotsSamples_v1.1 <- function(dsn = "PostgreSQL30", user = "brc_read
                                                                       "where visit.survey_id in (87,154,155) AND visit.deleted=false",
                                                                       "group by square.centroid_sref, plot.id, visit.id",
                                                                       ") sq",
-                                                                    "on occs.sample = sq.sample_id"))
-                                                                    RODBC::odbcClose(channel)
-                                                                    rm(channel)
+                                                                    "on occs.sample = sq.sample_id"
+                                                                    )
+                                                                    temp <- dbGetQuery(conn = Connection, statement = select_query)
                                                                     return(temp) }
 
 ############# Function to retrieve taxon data for samples
 ## Change dates as appropriate! (Lines 67 and 76)
 ## 03.09.2019 -- update to exclude rejected records
-getNpmsData_SamplesSpecies <- function(dsn = "PostgreSQL30", user = "brc_read_only", password) {   
-                                                                                  channel <- RODBC::odbcConnect(dsn = dsn, uid = user, pwd = password)
-                                                                                  temp <- RODBC::sqlQuery(channel, paste( ## Wildflower data
-                                                                                    "select co.id, co.sample_id, co.date_start as date, co.preferred_taxon, co.taxa_taxon_list_external_key as tvk,  oav.int_value as domin, co.record_status as record_status, co.sensitivity_precision",
-                                                                                    "from indicia.cache_occurrences co",
-                                                                                    "LEFT join indicia.occurrence_attribute_values oav on oav.occurrence_id = co.id and oav.deleted=false",
-                                                                                    "LEFT join indicia.occurrence_attributes oa on oa.id=oav.occurrence_attribute_id",
-                                                                                    "AND oa.id = 104 and oav.deleted=false Where co.survey_id in (87) and co.training = 'f'",
-                                                                                    "and co.date_start between '2015-01-01' and '2019-12-31'",
-                                                                                    "and co.record_status in ('V','C')", ## exclude rejected data
-                                                                                    "group by co.id, co.sample_id, co.date_start, co.preferred_taxon, co.taxa_taxon_list_external_key, oav.int_value, co.record_status, co.sensitivity_precision;"))
-                                                                                  temp2 <- RODBC::sqlQuery(channel, paste( ## Indicator and Inventory data
-                                                                                    "select co.id, co.sample_id, co.date_start as date, co.preferred_taxon, co.taxa_taxon_list_external_key as tvk,  terms.term as domin, co.record_status as record_status, co.sensitivity_precision",
-                                                                                    "from indicia.cache_occurrences co",
-                                                                                    "LEFT join indicia.occurrence_attribute_values oav on oav.occurrence_id = co.id  and oav.deleted=false",
-                                                                                    "LEFT join indicia.occurrence_attributes oa on oa.id=oav.occurrence_attribute_id AND oa.id = 214 and oav.deleted=false",
-                                                                                    "LEFT join indicia.termlists_terms tt on tt.id=oav.int_value and tt.deleted=false",
-                                                                                    "LEFT join indicia.terms terms on terms.id = tt.term_id AND terms.deleted=false Where co.survey_id in (154,155) and co.training = 'f'",
-                                                                                    "and co.date_start between '2015-01-01' and '2019-12-31'",
-                                                                                    "and co.record_status in ('V','C')", ## exclude rejected data
-                                                                                    "group by co.id, co.sample_id, co.date_start, co.preferred_taxon, co.taxa_taxon_list_external_key, terms.term, co.record_status, co.sensitivity_precision;"))
-                                                                                  temp3 <- rbind(temp, temp2[-1,]) ## rbind but remove header from second file
-                                                                                  RODBC::odbcClose(channel)
-                                                                                  rm(channel)
-                                                                                  return(temp3) }
+getNpmsData_SamplesSpecies <- function(Connection = Connection) {
+                                                                query1 <- paste( ## Wildflower data
+                                                                  "select co.id, co.sample_id, co.date_start as date, co.preferred_taxon, co.taxa_taxon_list_external_key as tvk,  oav.int_value as domin, co.record_status as record_status, co.sensitivity_precision",
+                                                                  "from indicia.cache_occurrences co",
+                                                                  "LEFT join indicia.occurrence_attribute_values oav on oav.occurrence_id = co.id and oav.deleted=false",
+                                                                  "LEFT join indicia.occurrence_attributes oa on oa.id=oav.occurrence_attribute_id",
+                                                                  "AND oa.id = 104 and oav.deleted=false Where co.survey_id in (87) and co.training = 'f'",
+                                                                  "and co.date_start between '2015-01-01' and '2019-12-31'",
+                                                                  "and co.record_status in ('V','C')", ## exclude rejected data
+                                                                  "group by co.id, co.sample_id, co.date_start, co.preferred_taxon, co.taxa_taxon_list_external_key, oav.int_value, co.record_status, co.sensitivity_precision;"
+                                                                  )
+                                                                temp1 <- dbGetQuery(conn = Connection, statement = query1)
+                                                                query2 <- paste( ## Indicator and Inventory data
+                                                                  "select co.id, co.sample_id, co.date_start as date, co.preferred_taxon, co.taxa_taxon_list_external_key as tvk,  terms.term as domin, co.record_status as record_status, co.sensitivity_precision",
+                                                                  "from indicia.cache_occurrences co",
+                                                                  "LEFT join indicia.occurrence_attribute_values oav on oav.occurrence_id = co.id  and oav.deleted=false",
+                                                                  "LEFT join indicia.occurrence_attributes oa on oa.id=oav.occurrence_attribute_id AND oa.id = 214 and oav.deleted=false",
+                                                                  "LEFT join indicia.termlists_terms tt on tt.id=oav.int_value and tt.deleted=false",
+                                                                  "LEFT join indicia.terms terms on terms.id = tt.term_id AND terms.deleted=false Where co.survey_id in (154,155) and co.training = 'f'",
+                                                                  "and co.date_start between '2015-01-01' and '2019-12-31'",
+                                                                  "and co.record_status in ('V','C')", ## exclude rejected data
+                                                                  "group by co.id, co.sample_id, co.date_start, co.preferred_taxon, co.taxa_taxon_list_external_key, terms.term, co.record_status, co.sensitivity_precision;"
+                                                                  )
+                                                                temp2 <- dbGetQuery(conn = Connection, statement = query2)
+                                                                temp3 <- rbind(temp1, temp2[-1,]) ## rbind but remove header from second file
+                                                                return(temp3) }
