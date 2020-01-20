@@ -54,10 +54,10 @@ domins <- read.csv(file = "data/dominScores.csv", header = T, stringsAsFactors =
 # samples are entirely NA (i.e. no known states)
 ###############################################
 library(dplyr)
-Achi_mill_PAN <- (Achi_mill_PAN %>% 
-                    group_by(plot_id) %>%
-                    filter(any(!is.na(dominUnify))) # resolves to true if there is at least one non-NA value within a group of plot samples
-)
+#Achi_mill_PAN <- (Achi_mill_PAN %>% 
+#                    group_by(plot_id) %>%
+#                    filter(any(!is.na(dominUnify))) # resolves to true if there is at least one non-NA value within a group of plot samples
+#)
 
 # not sure it really matters, but sorting the data by year and then plot first may simplify downstream things
 Achi_mill_PAN$year <- format(Achi_mill_PAN$date.x, "%Y") # create year column
@@ -218,7 +218,7 @@ for (j in 1:Y){ # years
     # positive cover
     a[j] <- mu[j] * phi[j]
     b[j] <- (1 - mu[j]) * phi[j]
-    cPos[j] ~ dbeta(a[j], b[j]) T(1e-16,0.9999999999999999) # random draw of cPos for that year, based on data-informed beta distribution
+    cPos[j] ~ dbeta(a[j], b[j]) T(1e-4,0.9999) # random draw of cPos for that year, based on data-informed beta distribution
   for (i in 1:N){ # plots
       # ZI cover
       C[i,j] <- z[i,j] * cPos[j] # combine random draw of cPos for year j with estimated plot-specific occupancy
@@ -241,14 +241,14 @@ avgOcc <- mean(annOcc[]) # average annual occupancy
 ## Plot positive covers
 for(k in 1:n.Plot.pos){ 
     cposCens[k] ~ dinterval(cposLatent[k], lims[k,])
-    cposLatent[k] ~ dbeta(a[year[k]], b[year[k]]) T(1e-16,0.9999999999999999) # recorded cover when present follows beta distribution
+    cposLatent[k] ~ dbeta(a[year[k]], b[year[k]]) T(1e-4,0.9999) # recorded cover when present follows beta distribution
 }
 
 ## Observation model for all plot visits ([within-year] detection within plots)
 for (a in 1:V2){
     y[a] ~ dbern(py[a]) # detectability influences detection
     py[a] <- z[plotZ[a], yearZ[a]] * p.dec[a] # true state x detectability
-    p.dec[a] <- min(max(1e-16, p.Dec[a]), 0.9999999999999999) # trick to stop numerical problems
+    p.dec[a] <- min(max(1e-4, p.Dec[a]), 0.9999) # trick to stop numerical problems
     
     # detectability model: g1 is cover effect, g2 is grazing effect (with missing values), g3 is survey level (no missing values)
     ##############################################################
@@ -268,7 +268,7 @@ for(j in 1:Y){
   m[j] ~ dnorm(logit(mean.m), tau.m)
 }  
 tau.m <- 1/pow(sd.mA, 2)
-sd.mA <- sd.m + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
+sd.mA <- sd.m #+ 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
 sd.m ~ dt(0, 0.1, 1)T(0,)
 
 ## Cover (with random walk prior)
@@ -280,7 +280,8 @@ mu[1] ~ dbeta(1, 1)T(1e-4,0.9999) # PPP change
 for (j in 2:Y){
   mInt[j] ~ dnorm(logit(mu[j-1]), 4)
   mu[j] <- ilogit(mInt[j]) # mean follows low-variation random walk on logit-normal scale (sd = 0.5, so tau = 4)
-  phi[j] ~ dt(0, 0.1, 1)T(0,) # phi's are independent half-Cauchy priors (make tau = 0.1 given likely values of a/b)
+  #phi[j] ~ dt(0, 0.1, 1)T(0,) # phi's are independent half-Cauchy priors (make tau = 0.1 given likely values of a/b)
+  phi[j] ~ dpar(1.5, 0.1) # alpha, c
 }
 
 ## Detection model
@@ -293,7 +294,8 @@ for (j in 1:g2Levs) { g2[j] ~ dnorm(g2mu, g2tau) }
 mean.g2 ~ dbeta(1,1)T(1e-4,0.9999)
 g2mu <- logit(mean.g2)
 g2tau <- 1/pow(sd.g2A, 2)
-sd.g2A <- sd.g2 + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
+#sd.g2A <- sd.g2 + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
+sd.g2A <- sd.g2
 sd.g2 ~ dt(0, 0.01, 1)T(0,)
 
 # Hierarchical prior for survey levels
@@ -301,7 +303,8 @@ for (j in 1:g3Levs) { g3[j] ~ dnorm(g3mu, g3tau) }
 mean.g3 ~ dbeta(1,1)T(1e-4,0.9999)
 g3mu <- logit(mean.g3)
 g3tau <- 1/pow(sd.g3A, 2)
-sd.g3A <- sd.g3 + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
+#sd.g3A <- sd.g3 + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
+sd.g3A <- sd.g3
 sd.g3 ~ dt(0, 0.01, 1)T(0,)
 
 } ## END MODEL
@@ -415,3 +418,28 @@ pA <- pMu * pPhi
 pB <- (1 - pMu) * pPhi
 hist(rbeta(n=1000, shape1 = pA, shape2 = pB), main = "Draws from beta using Pareto \nprior on tau")
 hist(logit(rbeta(n=1000, shape1 = pA, shape2 = pB)), main = "Logit scale")
+
+
+### Priors ###
+## Intercept for state model for occupancy
+### JAGS CODE
+#mean.m[1] ~ dbeta(1,1)T(1e-4,0.9999)
+#for(j in 2:Y){
+#  m[j] ~ dnorm(logit(mean.m[j-1]), tau.m)
+#}  
+#tau.m <- 1/pow(sd.mA, 2)
+#sd.mA <- sd.m + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
+#sd.m ~ dt(0, 0.1, 1)T(0,)
+###
+par(mfrow=c(1,2))
+sD <- rtt(n = 1000, location = 0, scale = 0.01, df = 1, left = 0, right = Inf) # Irvine etc.
+mU <- logit(rbeta(1000,1,1))
+hist(rnorm(n = 1000, mean = mU, sd = sD))
+hist(ilt(rnorm(n = 1000, mean = mU, sd = sD)))
+
+# SD + 0.1: see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
+par(mfrow=c(1,2))
+sD <- rtt(n = 1000, location = 0, scale = 0.01, df = 1, left = 0, right = Inf) # Irvine etc.
+mU <- logit(rbeta(1000,1,1))
+hist(rnorm(n = 1000, mean = mU, sd = sD+0.1))
+hist(ilt(rnorm(n = 1000, mean = mU, sd = sD+0.1)))

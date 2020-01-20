@@ -7,8 +7,8 @@
 #source(file = "scripts/2_getDataFromIndiciaExec.R")
 ## Load data (previously extracted using functions in script 1)
 ## Or will be in the global environment if sourcing script "2_getData..."
-load(file = "data/npms_SamplesSpecies_2020-01-03.Rdata")
-load(file = "data/npms_PlotsSamples_2020-01-03.Rdata")
+load(file = "data/npms_SamplesSpecies_2020-01-16.Rdata")
+load(file = "data/npms_PlotsSamples_2020-01-16.Rdata")
 
 
 ## Read in the official list of indicators with indicia preferred names and TVKs
@@ -153,10 +153,11 @@ spSamplePA_v1.1 <- function(samples, species){ tryCatch(
     samples_PAN <- merge(samples_PAN, npms_spp[npms_spp$UnifiedPlusInd == species,], by.x = "sample_id", by.y = "sample_id", all.x = T, all.y = F)
     samples_PAN$domin <- ifelse(samples_PAN$PAN == 0, 0, samples_PAN$domin)
     samples_PAN <- merge(samples_PAN, domins, by.x = "domin", by.y = "dominOrig", all.x = T, all.y = F)
+    samples_PAN$dominUnify <- ifelse(test = is.na(samples_PAN$dominUnify) & samples_PAN$PAN == 1, 11, samples_PAN$dominUnify) # this line will code presences with no abundance (due to website bug in early years) as '11'
     samples_PAN <- merge(samples_PAN, grazeDat[,c("sample","grazing")], by.x = "sample_id", by.y = "sample", all.x = T, all.y = F) # add grazing data
-    samples_PAN$grazing <- droplevels(samples_PAN$grazing)
+    #samples_PAN$grazing <- droplevels(samples_PAN$grazing)
     samples_PAN <- merge(samples_PAN, mowDat[,c("sample","cutting")], by.x = "sample_id", by.y = "sample", all.x = T, all.y = F) # add mowing/cutting data
-    samples_PAN$cutting <- droplevels(samples_PAN$cutting)
+    #samples_PAN$cutting <- droplevels(samples_PAN$cutting)
     return(samples_PAN)}, 
     error = function(err) print(species) )
 }
@@ -164,7 +165,11 @@ spSamplePA_v1.1 <- function(samples, species){ tryCatch(
 ## Let's see if it works! (looks ok - 05 09 2019)
 grasslands <- c("Neutral pastures and meadows", "Dry acid grassland", "Dry calcareous grassland", "Neutral damp grassland", "Lowland grassland")
 grassSamples <- getSamples(habsList = grasslands)
+samples = grassSamples; species = "Achillea millefolium"
+samples = grassSamples; species = "Gymnadenia conopsea"
 Achi_mill_PAN <- spSamplePA_v1.1(samples = grassSamples, species = "Achillea millefolium") # Seems good (now 3979 rows)
 save(Achi_mill_PAN, file = paste("data/Achi_mille_grassSamples_", as.character(Sys.Date()), ".Rdata", sep = ""))
+Gym_con_PAN <- spSamplePA_v1.1(samples = grassSamples, species = "Gymnadenia conopsea") # Seems good (now 3979 rows)
+save(Gym_con_PAN, file = paste("data/Gymn_conop_grassSamples_", as.character(Sys.Date()), ".Rdata", sep = ""))
 #head(Achi_mill_PAN)
 #load(file = "data/Achi_mille_grassSamples_20180920.Rdata") # old data (trends proj 1) for comparison
