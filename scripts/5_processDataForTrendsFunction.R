@@ -54,13 +54,15 @@ spForMods <- sppDatList[!names(sppDatList) %in% excludedSpp]
 # head(spForMods[[1]]); names(spForMods[1])
 # x <- spForMods[[1]]
 ## Function for preparing species datasets for the JAGS model and then running model
-runModels_v1 <- function(i, file = 'scripts/JAGS/JAGS_mod4.1.txt') {
+runModels_v1 <- function(i, file = 'scripts/JAGS/JAGS_mod4.3.txt') {
   x <- spForMods[[i]]
   #x <- (x %>% group_by(plot_id) %>% filter(any(!is.na(dominUnify))) %>% as.data.frame()) # added in v1: keep plots with at least one non NA only
   if ( is.factor(x$date.x) ) { x$date.x <- as.Date(as.character(x$date.x), format = "%d/%m/%Y") }
-  x$grazing <- as.numeric(factor(x$grazing, levels(x$grazing)[c(2,3,1)]))
+  if ( is.character(x$grazing) ) {x$grazing[is.na(x$grazing)] <- "Absent" }
+  if ( is.factor(x$grazing) ) {x$grazing <- as.character(x$grazing); x$grazing[is.na(x$grazing)] <- "Absent"}
+  x$grazing <- factor(x$grazing, ordered = T, levels = c("Absent", "Low", "Moderate", "High"))
   #levels(x$cutting) <- "cut/mow" # not needed yet!
-  x$title <- factor(x$title, levels(x$title)[c(3,1,2)])
+  x$title <- factor(x$title, ordered = T, levels = c("Wildflower survey", "Indicator survey", "Inventory survey"))
   x$year <- format(x$date.x, "%Y")
   x <- x[order(x$year, x$plot_id), ]
   uniPlots <- unique(x$plot_id) # unique plot IDs - 31/12/2018 = 933
@@ -128,27 +130,33 @@ runModels_v1 <- function(i, file = 'scripts/JAGS/JAGS_mod4.1.txt') {
   }
   y <- y1 # visit-level detection history (binary)
   # Prepare data for JAGS
-  yOrig[yOrig=11] <- NA # remove the value 11 (not appropriate as covar in detection model)
+  yOrig[yOrig==11] <- NA # remove these for the purposes of using yOrig as a covar in detection model
+  yOrig[is.na(yOrig)] <- 0 # no cover = zero for covar purposes
+  y.ind <- yOrig # also use Orig to create indicator to indicate whether there is a cover value or one needs creating
+  y.ind[y.ind >= 1] <- 1 # yOrig cover value present
+  y.ind[is.na(y.ind)] <- 0 # yOrig cover value present
   Data <- list(N = N,
                Y = Y,
                n.Plot.pos = n.Plot.pos,
                cposCens = cpos.Cens, # indicator (is censored?)
                cposLatent = cpos.Latent, # NA values for latent observations
                lims = lims,
-               #plot = plot,
+               cuts = c(1e-16,1e-4,0.01,0.03,0.05,0.1,0.25,0.33,0.5,0.75,0.95,0.9999),
                year = year,
                V2 = V2,
                plotZ = plotZ,
                yearZ = yearZ,
                y = y,
-               x2 = x2,
-               x3 = x3,
-               yOrig = yOrig,
-               g2Levs = 3,
-               g3Levs = 3,
-               pi = c(0.33,0.33,0.33))
+               x2 = as.numeric(x2), # grazing
+               x3 = as.numeric(x3), # survey level
+               yOrig = yOrig, # make sure yOrig = 11 is deleted (used as covar on detection)
+               y.ind = y.ind,
+               g2Levs = length(unique(x2)), # sometimes some levels might be absent
+               g3Levs = length(unique(x3))) # sometimes some levels might be absent
   zinit <- matrix(1, nrow = N, ncol = Y)
   inits.fn <- function() list(z = zinit,
+                              sdC = runif(1,0,10),
+                              sd0 = runif(1,0,10),
                               sd.m = runif(1,0,10),
                               sd.g2 = runif(1,0,10),
                               sd.g3 = runif(1,0,10),
@@ -157,20 +165,23 @@ runModels_v1 <- function(i, file = 'scripts/JAGS/JAGS_mod4.1.txt') {
                               mean.g2 = runif(1,0,1),
                               mean.g3 = runif(1,0,1),
                               phi = rep(runif(1,1,10), Y),
-                              g1 = runif(1,-5,5),
-                              cposLatent = c(0.001,0.025,0.04,0.075,0.175,0.29,0.375,0.625,0.85,0.975,0.5)[spPos$dominUnify] 
-                              )
+                              y.hat = rep(runif(1,0,1), V2),
+                              g1 = runif(1,0,3),
+                              # note extra initial value for dominUnify = 11 (represents a presence with unknown cover)
+                              cposLatent = c(0.001,0.025,0.04,0.075,0.175,0.29,0.375,0.625,0.85,0.975,0.5)[spPos$dominUnify]
+  )
   #for ref only
   cPos.Init <- c(0.001,0.025,0.04,0.075,0.175,0.29,0.375,0.625,0.85,0.975,0.5)[spPos$dominUnify]
   ### MAKE SURE YOU HAVE GIVEN THE RIGHT MODEL SCRIPT TO THE FUNCTION ###
-  jagsModel <- rjags::jags.model(file = file, data = Data, inits = inits.fn, n.chains = 3, n.adapt= 500)
+  jagsModel <- rjags::jags.model(file = file, data = Data, inits = inits.fn, n.chains = 6, n.adapt = 100)
   ### MAKE SURE YOU HAVE THE RIGHT MODEL SCRIPT ###
   # Specify parameters for which posterior samples are saved
   #para.names <- c('psi')
   para.names <- c('mC', 'mPsi', 'mu', 'annOcc', 'avgOcc')
-  # Continue the MCMC runs with sampling
-  samples <- rjags::coda.samples(jagsModel, variable.names = para.names, n.iter = 1000)
-  ## Inspect results
+  # Continue the MCMC runs with 
+  update(jagsModel, n.iter = 5000) # burn in!
+  samples <- rjags::coda.samples(jagsModel, variable.names = para.names, n.iter = 5000, thin = 5)
+    ## Inspect results
   out <- summary(samples)
   mu_sd <- out$stat[,1:2] #make columns for mean and sd
   q <- out$quantile[,c(1,3,5)] #make columns for median and CI
@@ -189,7 +200,7 @@ runModels_v1 <- function(i, file = 'scripts/JAGS/JAGS_mod4.1.txt') {
 # Function runModels_v1() will be applied across the list created in 4_extractData.R (sppDatList), minus excluded species
 sppModels <- list()
 #sppModels <- lapply(seq_along(spForMods[1]), function(i) runModels_v1(i)) # test
-sppModels <- lapply(seq_along(spForMods), function(i, file = 'scripts/JAGS/JAGS_mod4.1.txt') runModels_v1(i))
+sppModels <- lapply(seq_along(spForMods[i]), function(i, file = 'scripts/JAGS/JAGS_mod4.3.txt') runModels_v1(i))
 names(sppModels) <- names(spForMods)
 save(sppModels, file = "outputs/sppRuns/grasslandResults_06012020_FULL.Rdata") # this is the run across all models that used the reduced set of plots (excluding plots with only NAs)
 
@@ -205,22 +216,21 @@ hist(test[c(1003:1993),1], breaks = 1000)
 ######################################
 ## JAGS model
 ######################################
-sink('scripts/JAGS/JAGS_mod4.1.txt')
+sink('scripts/JAGS/JAGS_mod4.3.txt')
 cat("
 model{
 for (j in 1:Y){ # years
     # positive cover
-    a[j] <- mu[j] * phi[j]
-    b[j] <- (1 - mu[j]) * phi[j]
-    cPos[j] ~ dbeta(a[j], b[j])T(1e-4,0.9999) # random draw of cPos for that year, based on data-informed beta distribution
+    alpha[j] <- mu[j] * phi[j]
+    beta[j] <- (1 - mu[j]) * phi[j]
+    cPos[j] ~ dbeta(alpha[j], beta[j]) T(1e-4,0.9999) # random draw of cPos for that year, based on data-informed beta distribution
   for (i in 1:N){ # plots
       # ZI cover
       C[i,j] <- z[i,j] * cPos[j] # combine random draw of cPos for year j with estimated plot-specific occupancy
       
       # occupancy
       z[i,j] ~ dbern(psi[i,j]) # true PA state of a plot within a year depends on occupancy probability psi
-      logit(psi[i,j]) <- m[j] # year random intercept on occupancy prob (same as Sparta)
-      #psi[i,j] ~ dbeta(1,1)
+      logit(psi[i,j]) <- m[j] # year random intercept on occupancy prob
       } # end of plots loop
 } # end of years loop
 
@@ -235,7 +245,7 @@ avgOcc <- mean(annOcc[]) # average annual occupancy
 ## Plot positive covers
 for(k in 1:n.Plot.pos){ 
     cposCens[k] ~ dinterval(cposLatent[k], lims[k,])
-    cposLatent[k] ~ dbeta(a[year[k]], b[year[k]])T(1e-4,0.9999) # recorded cover when present follows beta distribution
+    cposLatent[k] ~ dbeta(alpha[year[k]], beta[year[k]])T(1e-4,0.9999) # recorded cover when present follows beta distribution
 }
 
 ## Observation model for all plot visits ([within-year] detection within plots)
@@ -245,60 +255,54 @@ for (a in 1:V2){
     p.dec[a] <- min(max(1e-4, p.Dec[a]), 0.9999) # trick to stop numerical problems
     
     # detectability model: g1 is cover effect, g2 is grazing effect (with missing values), g3 is survey level (no missing values)
-    ##############################################################
-    ## Currently breaks here when you add in categorical predictor g3
-    ##############################################################
-    logit(p.Dec[a]) <- g0 + g1*yOrig[a] + g2[x2[a]] + g3[x3[a]]
-    yOrig[a] ~ dunif(0,10) # this could be improved using the Wilson/Irvine approach (i.e. imputing new values where missing, 
-                           # rather than relying on noise-inducing uniform draws)
-    x2[a] ~ dcat(pi) # missing values for grazing info (or assume 0): any equally likely (could supplement with veg height info)
-    #x3[a] ~ dcat(pi) # missing values for survey level. Only needed for PPP as there are no missing values for this covar in dataset
+    logit(p.Dec[a]) <- g0 + g1*y.cov[a] + g3[x3[a]] + g2[x2[a]] 
+    y.cov[a] <- yOrig[a]*y.ind[a] + y.int[a]*(1-y.ind[a]) # y.cov is a combination of original Domin scores, and predicted Domin scores where NA
+    y.int[a] <- dinterval(y.hat[a], cuts)
+    y.hat[a] ~ dbeta(alpha[yearZ[a]],beta[yearZ[a]])T(1e-4,0.9999)
 }
 
 ### Priors ###
 ## Intercept for state model for occupancy
 mean.m ~ dbeta(1,1)T(1e-4,0.9999)
-for(j in 1:Y){
-  m[j] ~ dnorm(logit(mean.m), tau.m)
+m[1] ~ dnorm(logit(mean.m), tau0)
+tau0 <- 1/pow(sd0, 2)
+sd0 ~ dt(0, 1, 3)T(0,)
+for(j in 2:Y){
+  m[j] ~ dnorm(m[j-1], tau.m)T(logit(1e-4), logit(0.9999)) # fixing tau.m (e.g. at 4) results in much smoother trend
 }  
-tau.m <- 1/pow(sd.mA, 2)
-# Might want to check the following position (sd.m + 0.1) through PPP
-sd.mA <- sd.m #+ 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
-sd.m ~ dt(0, 0.1, 1)T(0,)
+tau.m <- 1/pow(sd.m, 2)
+sd.m ~ dt(0, 1, 3)T(0,)
 
 ## Cover (with random walk prior)
-#phi[1] ~ dt(0, 0.01, 1)T(0,)
 phi[1] ~ dpar(1.5, 0.1) # alpha, c
 mu[1] ~ dbeta(1, 1)T(1e-4,0.9999)
 for (j in 2:Y){
-  mInt[j] ~ dnorm(logit(mu[j-1]), 4)
   mu[j] <- ilogit(mInt[j]) # mean follows low-variation random walk on logit-normal scale (sd = 0.5, so tau = 4)
-  #phi[j] ~ dt(0, 0.1, 1)T(0,) # phi's are independent half-Cauchy priors (make tau = 0.1 given likely values of a/b)
+  mInt[j] ~ dnorm(logit(mu[j-1]), tauC)T(logit(1e-4), logit(0.9999)) # fixing tauC (e.g. at 4) results in much smoother trend
   phi[j] ~ dpar(1.5, 0.1) # alpha, c
 }
+tauC <- 1/pow(sdC, 2)
+sdC ~ dt(0, 1, 3)T(0,) #-- weaker, density mostly -10 - 10
+#sdC ~ dt(0, 0.001, 1)T(0,) # bit too strong (see 7_PriorPredChecks.R script) -- normally most density -5 to 5
 
 ## Detection model
 mean.p ~ dbeta(1,1)T(1e-4,0.9999) # broad intercept on prob scale
 g0 <- logit(mean.p) # transformed # note that this requires tweak to initial values
-g1 ~ dunif(-5, 5)
+g1 ~ dnorm(0, 0.1)T(0,) # moderate belief that this parameter should be positive, increase in cover increases detectability, all else being equal
 
 # Hierarchical prior for levels of grazing
 for (j in 1:g2Levs) { g2[j] ~ dnorm(g2mu, g2tau) }
-mean.g2 ~ dbeta(1,1)T(1e-4,0.9999)
+mean.g2 ~ dbeta(1,1)T(1e-3,0.999) # between -7 and 7
 g2mu <- logit(mean.g2)
-g2tau <- 1/pow(sd.g2A, 2)
-#sd.g2A <- sd.g2 + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
-sd.g2A <- sd.g2
-sd.g2 ~ dt(0, 0.01, 1)T(0,)
+g2tau <- 1/pow(sd.g2, 2)
+sd.g2 ~ dt(0, 1, 3)T(0,)
 
 # Hierarchical prior for survey levels
 for (j in 1:g3Levs) { g3[j] ~ dnorm(g3mu, g3tau) }
-mean.g3 ~ dbeta(1,1)T(1e-4,0.9999)
+mean.g3 ~ dbeta(1,1)T(1e-3,0.999) # between 
 g3mu <- logit(mean.g3)
-g3tau <- 1/pow(sd.g3A, 2)
-#sd.g3A <- sd.g3 + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
-sd.g3A <- sd.g3
-sd.g3 ~ dt(0, 0.01, 1)T(0,)
+g3tau <- 1/pow(sd.g3, 2)
+sd.g3 ~ dt(0, 1, 3)T(0,) # dt(mu,tau,k)
 
 } ## END MODEL
 ", fill = TRUE)

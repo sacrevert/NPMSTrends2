@@ -165,11 +165,13 @@ spSamplePA_v1.1 <- function(samples, species){ tryCatch(
 ## Let's see if it works! (looks ok - 05 09 2019)
 grasslands <- c("Neutral pastures and meadows", "Dry acid grassland", "Dry calcareous grassland", "Neutral damp grassland", "Lowland grassland")
 grassSamples <- getSamples(habsList = grasslands)
-samples = grassSamples; species = "Achillea millefolium"
-samples = grassSamples; species = "Gymnadenia conopsea"
-Achi_mill_PAN <- spSamplePA_v1.1(samples = grassSamples, species = "Achillea millefolium") # Seems good (now 3979 rows)
-save(Achi_mill_PAN, file = paste("data/Achi_mille_grassSamples_", as.character(Sys.Date()), ".Rdata", sep = ""))
-Gym_con_PAN <- spSamplePA_v1.1(samples = grassSamples, species = "Gymnadenia conopsea") # Seems good (now 3979 rows)
-save(Gym_con_PAN, file = paste("data/Gymn_conop_grassSamples_", as.character(Sys.Date()), ".Rdata", sep = ""))
+#samples = grassSamples; species = "Achillea millefolium"
+#samples = grassSamples; species = "Gymnadenia conopsea"
+#Achi_mill_PAN <- spSamplePA_v1.1(samples = grassSamples, species = "Achillea millefolium") # Seems good (now 3979 rows)
+#save(Achi_mill_PAN, file = paste("data/Achi_mille_grassSamples_", as.character(Sys.Date()), ".Rdata", sep = ""))
+#Gym_con_PAN <- spSamplePA_v1.1(samples = grassSamples, species = "Gymnadenia conopsea") # Seems good (now 3979 rows)
+#save(Gym_con_PAN, file = paste("data/Gymn_conop_grassSamples_", as.character(Sys.Date()), ".Rdata", sep = ""))
+Trif_camp_PAN <- spSamplePA_v1.1(samples = grassSamples, species = "Trifolium campestre") # Seems good (now 3979 rows)
+save(Trif_camp_PAN, file = paste("data/Trif_camp_grassSamples_", as.character(Sys.Date()), ".Rdata", sep = ""))
 #head(Achi_mill_PAN)
 #load(file = "data/Achi_mille_grassSamples_20180920.Rdata") # old data (trends proj 1) for comparison

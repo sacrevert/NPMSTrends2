@@ -13,16 +13,18 @@ library(dplyr)
 
 #load(file = "data/Achi_mille_grassSamples_2020-01-16.Rdata") ## pre-processed
 load(file = "data/Gymn_conop_grassSamples_2020-01-16.Rdata") ## pre-processed
-#dat <- Achi_mill_PAN
+#load(file = "data/Trif_camp_grassSamples_2020-01-24.Rdata") ## pre-processed
+#dat <- Trif_camp_PAN
 dat <- Gym_con_PAN
 str(dat)
 #dat$date.x <- as.Date(as.character(dat$date.x), format = "%d/%m/%Y")
 #load("W:/PYWELL_SHARED/Pywell Projects/BRC/_BRC_projects/NPMS/Analyses/2018 08 - Per species trend analyses/r_proj/NPMStrends/data/Achi_mille_grassSamples_20180920.Rdata")
 head(dat); tail(dat); unique(dat$dominUnify)
 # reorder grazing
-unique(dat$grazing) # "High"     "Low"      "Moderate"
+dat$grazing[is.na(dat$grazing)] <- "Absent"
 dat$grazing <- as.factor(dat$grazing)
-dat$grazing <- factor(dat$grazing, levels(dat$grazing)[c(2,3,1)])
+levels(dat$grazing) # "Absent" "High" "Low" "Moderate"
+dat$grazing <- factor(dat$grazing, levels(dat$grazing)[c(1,3,4,2)]) # reorder
 levels(dat$grazing)
 dat$grazing <- as.numeric(dat$grazing)
 # simplify cutting/mowing text
@@ -54,7 +56,7 @@ dat$title <- as.numeric(dat$title)
 # Change 25.03.2019 -- delete plots for which
 # samples are entirely NA (i.e. no known states)
 ###############################################
-library(dplyr)
+#library(dplyr)
 ## This bit was only necessary when we were using the wrong prior for the beta distribution on cover
 ## Presence of totally NA samples should just increase uncertainty, because for those we are sampling from the priors (for cover)
 ## Detectability, however, influenced by regression parameter estimates
@@ -62,7 +64,7 @@ library(dplyr)
 #            group_by(plot_id) %>%
 #            filter(any(!is.na(dominUnify))) # resolves to true if there is at least one non-NA value within a group of plot samples
 #            )
-##
+
 
 # not sure it really matters, but sorting the data by year and then plot first may simplify downstream things
 dat$year <- format(dat$date.x, "%Y") # create year column
@@ -164,26 +166,31 @@ y <- y1 # visit-level detection history (binary)
 ## Send data to JAGS
 ####################
 # Data list for passing to JAGS
-yOrig[yOrig=11] <- NA
+yOrig[yOrig==11] <- NA
+yOrig[is.na(yOrig)] <- 0
+y.ind <- yOrig
+y.ind[y.ind >= 1] <- 1
+y.ind[is.na(y.ind)] <- 0
 Data <- list(N = N,
              Y = Y,
              n.Plot.pos = n.Plot.pos,
              cposCens = cpos.Cens, # indicator (is censored?)
              cposLatent = cpos.Latent, # NA values for latent observations
              lims = lims,
+             cuts = c(1e-16,1e-4,0.01,0.03,0.05,0.1,0.25,0.33,0.5,0.75,0.95,0.9999),
              #plot = plot,
              year = year,
              V2 = V2,
              plotZ = plotZ,
              yearZ = yearZ,
              y = y,
-             x2 = x2, # grazing (with NAs)
+             x2 = x2, # grazing
              #x2 = c(rep(x = 1:3, times = 788) , 1),
              x3 = x3, # survey level
              yOrig = yOrig, # make sure yOrig = 11 is deleted (used as covar on detection)
-             g2Levs = 3, 
-             g3Levs = 3,
-             pi = c(0.33,0.33,0.33)) 
+             y.ind = y.ind,
+             g2Levs = 4, 
+             g3Levs = 3) 
 ###################################### END OF DATA PREP
 
 ###########################################
@@ -202,7 +209,8 @@ inits.fn <- function() list(z = zinit,
                             mean.g2 = runif(1,0,1),
                             mean.g3 = runif(1,0,1),
                             phi = rep(runif(1,1,10), Y),
-                            g1 = runif(1,-5,5),
+                            y.hat = rep(runif(1,0,1), V2),
+                            g1 = runif(1,0,3),
                             # note extra value for dominUnify = 11
                             cposLatent = c(0.001,0.025,0.04,0.075,0.175,0.29,0.375,0.625,0.85,0.975,0.5)[spPos$dominUnify]
 )
@@ -212,13 +220,13 @@ cPosInit <- c(0.001,0.025,0.04,0.075,0.175,0.29,0.375,0.625,0.85,0.975,0.5)[spPo
 ######################################
 ## JAGS model
 ######################################
-sink('scripts/JAGS/JAGS_mod4.2.txt')
+sink('scripts/JAGS/JAGS_mod4.3.txt')
 cat("
 model{
 for (j in 1:Y){ # years
     # positive cover
-    a[j] <- mu[j] * phi[j]
-    b[j] <- (1 - mu[j]) * phi[j]
+    alpha[j] <- mu[j] * phi[j]
+    beta[j] <- (1 - mu[j]) * phi[j]
     cPos[j] ~ dbeta(alpha[j], beta[j]) T(1e-4,0.9999) # random draw of cPos for that year, based on data-informed beta distribution
   for (i in 1:N){ # plots
       # ZI cover
@@ -226,7 +234,7 @@ for (j in 1:Y){ # years
       
       # occupancy
       z[i,j] ~ dbern(psi[i,j]) # true PA state of a plot within a year depends on occupancy probability psi
-      logit(psi[i,j]) <- m[j] # year random intercept on occupancy prob (same as Sparta)
+      logit(psi[i,j]) <- m[j] # year random intercept on occupancy prob
       } # end of plots loop
 } # end of years loop
 
@@ -241,7 +249,7 @@ avgOcc <- mean(annOcc[]) # average annual occupancy
 ## Plot positive covers
 for(k in 1:n.Plot.pos){ 
     cposCens[k] ~ dinterval(cposLatent[k], lims[k,])
-    cposLatent[k] ~ dbeta(alpha[year[k]], beta[year[k]]) T(1e-4,0.9999) # recorded cover when present follows beta distribution
+    cposLatent[k] ~ dbeta(alpha[year[k]], beta[year[k]])T(1e-4,0.9999) # recorded cover when present follows beta distribution
 }
 
 ## Observation model for all plot visits ([within-year] detection within plots)
@@ -251,11 +259,10 @@ for (a in 1:V2){
     p.dec[a] <- min(max(1e-4, p.Dec[a]), 0.9999) # trick to stop numerical problems
     
     # detectability model: g1 is cover effect, g2 is grazing effect (with missing values), g3 is survey level (no missing values)
-    logit(p.Dec[a]) <- g0 + g1*yOrig[a] + g3[x3[a]] + g2[x2[a]] 
-    yOrig[a] ~ dunif(0,10) # this could be improved using the Wilson/Irvine approach (i.e. imputing new values where missing, 
-                           # rather than relying on noise-inducing uniform draws)
-                           # e.g. ynew[a] <- rbeta(alpha[year[a]],beta[year[a]])
-    x2[a] ~ dcat(pi) # missing values for grazing info (or assume 0)
+    logit(p.Dec[a]) <- g0 + g1*y.cov[a] + g3[x3[a]] + g2[x2[a]] 
+    y.cov[a] <- yOrig[a]*y.ind[a] + y.int[a]*(1-y.ind[a]) # y.cov is a combination of original Domin scores, and predicted Domin scores where NA
+    y.int[a] <- dinterval(y.hat[a], cuts)
+    y.hat[a] ~ dbeta(alpha[yearZ[a]],beta[yearZ[a]])T(1e-4,0.9999)
 }
 
 ### Priors ###
@@ -263,12 +270,12 @@ for (a in 1:V2){
 mean.m ~ dbeta(1,1)T(1e-4,0.9999)
 m[1] ~ dnorm(logit(mean.m), tau0)
 tau0 <- 1/pow(sd0, 2)
-sd0 ~ dt(0, 0.01, 1)T(0,)
+sd0 ~ dt(0, 1, 3)T(0,)
 for(j in 2:Y){
   m[j] ~ dnorm(m[j-1], tau.m)T(logit(1e-4), logit(0.9999)) # fixing tau.m (e.g. at 4) results in much smoother trend
 }  
 tau.m <- 1/pow(sd.m, 2)
-sd.m ~ dt(0, 0.01, 1)T(0,)
+sd.m ~ dt(0, 1, 3)T(0,)
 
 ## Cover (with random walk prior)
 phi[1] ~ dpar(1.5, 0.1) # alpha, c
@@ -279,38 +286,40 @@ for (j in 2:Y){
   phi[j] ~ dpar(1.5, 0.1) # alpha, c
 }
 tauC <- 1/pow(sdC, 2)
-sdC ~ dt(0, 0.01, 1)T(0,)
+sdC ~ dt(0, 1, 3)T(0,) #-- weaker, density mostly -10 - 10
+#sdC ~ dt(0, 0.001, 1)T(0,) # bit too strong (see 7_PriorPredChecks.R script) -- normally most density -5 to 5
 
 ## Detection model
 mean.p ~ dbeta(1,1)T(1e-4,0.9999) # broad intercept on prob scale
 g0 <- logit(mean.p) # transformed # note that this requires tweak to initial values
-g1 ~ dunif(-5, 5)
+g1 ~ dnorm(0, 0.1)T(0,) # moderate belief that this parameter should be positive, increase in cover increases detectability, all else being equal
 
 # Hierarchical prior for levels of grazing
 for (j in 1:g2Levs) { g2[j] ~ dnorm(g2mu, g2tau) }
-mean.g2 ~ dbeta(1,1)T(1e-3,0.999)
+mean.g2 ~ dbeta(1,1)T(1e-3,0.999) # between -7 and 7
 g2mu <- logit(mean.g2)
 g2tau <- 1/pow(sd.g2, 2)
-sd.g2 ~ dt(0, 0.01, 1)T(0,)
+sd.g2 ~ dt(0, 1, 3)T(0,)
 
 # Hierarchical prior for survey levels
 for (j in 1:g3Levs) { g3[j] ~ dnorm(g3mu, g3tau) }
-mean.g3 ~ dbeta(1,1)T(1e-3,0.999)
+mean.g3 ~ dbeta(1,1)T(1e-3,0.999) # between 
 g3mu <- logit(mean.g3)
 g3tau <- 1/pow(sd.g3, 2)
-sd.g3 ~ dt(0, 0.01, 1)T(0,)
+sd.g3 ~ dt(0, 1, 3)T(0,) # dt(mu,tau,k)
 
 } ## END MODEL
 ", fill = TRUE)
 sink()
 
-jagsModel <- jags.model(file= 'scripts/JAGS/JAGS_mod4.2.txt', data = Data, inits = inits.fn, n.chains = 3, n.adapt= 500)
+jagsModel <- jags.model(file= 'scripts/JAGS/JAGS_mod4.3.txt', data = Data, inits = inits.fn, n.chains = 6, n.adapt= 100)
 
 # Specify parameters for which posterior samples are saved
-#para.names <- c('mC', 'mPsi', 'mu', 'annOcc', 'avgOcc')
-para.names <- c('mC')
+para.names <- c('mC', 'mPsi', 'mu', 'annOcc', 'avgOcc', 'g0', 'g1', 'g2', 'g3')
+#para.names <- c('mC')
 # Continue the MCMC runs with sampling
-samples <- coda.samples(jagsModel, variable.names = para.names, n.iter = 1500, thin = 3)
+samples <- coda.samples(jagsModel, variable.names = para.names, n.iter = 10000, thin = 10)
+save(samples, file = "samples.Rdata")
 ## Inspect results
 out <- summary(samples)
 mu_se <- out$stat[,c(1,3)] #make columns for mean and se

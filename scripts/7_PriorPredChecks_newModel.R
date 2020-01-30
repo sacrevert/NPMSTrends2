@@ -75,7 +75,7 @@ if ( max(unique(Achi_mill_PAN$year)) > format(Sys.time(), "%Y") ) {
 # 
 Y <- length(unique(format(as.Date(Achi_mill_PAN$date.x), "%Y"))) # number of years
 # All Domin data, including zeros and NAs
-yOrig <- Achi_mill_PAN$dominUnify; hist(yOrig, breaks = 10)
+yOrig <- Achi_mill_PAN$dominUnify#; hist(yOrig, breaks = 10)
 # All grazing data
 x2 <- Achi_mill_PAN$grazing
 # All survey level data
@@ -167,7 +167,7 @@ Data <- list(N = N,
              cposCens = cpos.Cens, # indicator (is censored?)
              cposLatent = cpos.Latent, # NA values for latent observations
              lims = lims,
-             #plot = plot,
+             cuts = c(1e-16,1e-4,0.01,0.03,0.05,0.1,0.25,0.33,0.5,0.75,0.95,0.9999),
              year = year,
              V2 = V2,
              plotZ = plotZ,
@@ -181,6 +181,7 @@ Data <- list(N = N,
              x3 = rep(NA, length(x3)), # for PPP
              #yOrig = yOrig,
              yOrig = rep(NA, length(yOrig)), # for PPP
+             y.ind = rep(0, length(yOrig)), # for PPP -- all values come from estimated cover distribution
              g2Levs = 3, 
              g3Levs = 3,
              pi = c(0.33,0.33,0.33)) 
@@ -192,6 +193,8 @@ Data <- list(N = N,
 # Initial parameter values for JAGS
 zinit <- matrix(1, nrow = N, ncol = Y)
 inits.fn <- function() list(z = zinit,
+                            sdC = runif(1,0,10),
+                            sd0 = runif(1,0,10),
                             sd.m = runif(1,0,10),
                             sd.g2 = runif(1,0,10),
                             sd.g3 = runif(1,0,10),
@@ -199,11 +202,13 @@ inits.fn <- function() list(z = zinit,
                             mean.p = runif(1,0,1),
                             mean.g2 = runif(1,0,1),
                             mean.g3 = runif(1,0,1),
-                            phi = rep(runif(1,1,10), Y),
-                            g1 = runif(1,-5,5),
+                            #mu = rep(0.5, Y),
+                            phi = rep(2, Y),
+                            y.hat = rep(runif(1,0,1), V2),
+                            g1 = runif(1,0,3),
                             #cposLatent = c(0.001,0.025,0.04,0.075,0.175,0.29,0.375,0.625,0.85,0.975)[spPos$dominUnify]
                             ## for PPP
-                            cposLatent = rep(0.01, times = n.Plot.pos,) # PPP
+                            cposLatent = runif(n = n.Plot.pos, min = 0.0001, max = 0.999) # PPP
 )
 #for ref only
 cPosInit <- c(0.001,0.025,0.04,0.075,0.175,0.29,0.375,0.625,0.85,0.975)[spPos$dominUnify]
@@ -211,14 +216,14 @@ cPosInit <- c(0.001,0.025,0.04,0.075,0.175,0.29,0.375,0.625,0.85,0.975)[spPos$do
 ######################################
 ## JAGS model
 ######################################
-sink('scripts/JAGS/JAGS_mod_PPP.txt')
+sink('scripts/JAGS/JAGS_mod_PPP_v2.txt')
 cat("
 model{
 for (j in 1:Y){ # years
     # positive cover
-    a[j] <- mu[j] * phi[j]
-    b[j] <- (1 - mu[j]) * phi[j]
-    cPos[j] ~ dbeta(a[j], b[j]) T(1e-4,0.9999) # random draw of cPos for that year, based on data-informed beta distribution
+    alpha[j] <- mu[j] * phi[j]
+    beta[j] <- (1 - mu[j]) * phi[j]
+    cPos[j] ~ dbeta(alpha[j], beta[j]) T(1e-4,0.9999) # random draw of cPos for that year, based on data-informed beta distribution
   for (i in 1:N){ # plots
       # ZI cover
       C[i,j] <- z[i,j] * cPos[j] # combine random draw of cPos for year j with estimated plot-specific occupancy
@@ -226,7 +231,6 @@ for (j in 1:Y){ # years
       # occupancy
       z[i,j] ~ dbern(psi[i,j]) # true PA state of a plot within a year depends on occupancy probability psi
       logit(psi[i,j]) <- m[j] # year random intercept on occupancy prob (same as Sparta)
-      #psi[i,j] ~ dbeta(1,1)
       } # end of plots loop
 } # end of years loop
 
@@ -241,7 +245,7 @@ avgOcc <- mean(annOcc[]) # average annual occupancy
 ## Plot positive covers
 for(k in 1:n.Plot.pos){ 
     cposCens[k] ~ dinterval(cposLatent[k], lims[k,])
-    cposLatent[k] ~ dbeta(a[year[k]], b[year[k]]) T(1e-4,0.9999) # recorded cover when present follows beta distribution
+    cposLatent[k] ~ dbeta(alpha[year[k]], beta[year[k]]) T(1e-4,0.9999) # recorded cover when present follows beta distribution
 }
 
 ## Observation model for all plot visits ([within-year] detection within plots)
@@ -251,73 +255,78 @@ for (a in 1:V2){
     p.dec[a] <- min(max(1e-4, p.Dec[a]), 0.9999) # trick to stop numerical problems
     
     # detectability model: g1 is cover effect, g2 is grazing effect (with missing values), g3 is survey level (no missing values)
-    ##############################################################
-    ## Currently breks here when you add in categorical predictor g3
-    ##############################################################
-    logit(p.Dec[a]) <- g0 + g1*yOrig[a] + g3[x3[a]] + g2[x2[a]] 
-    yOrig[a] ~ dunif(0,10) # this could be improved using the Wilson/Irvine approach (i.e. imputing new values where missing, 
-                           # rather than relying on noise-inducing uniform draws)
-    x2[a] ~ dcat(pi) # missing values for grazing info (or assume 0)
-    x3[a] ~ dcat(pi) # missing values for survey level info: there actually aren't any missing, but use this for generating prior predictive checks
+    logit(p.Dec[a]) <- g0 + g1*y.cov[a] + g3[x3[a]] + g2[x2[a]] 
+    y.cov[a] <- yOrig[a]*y.ind[a] + y.int[a]*(1-y.ind[a]) # y.cov is a combination of original Domin scores, and predicted Domin scores where NA
+    y.int[a] <- dinterval(y.hat[a], cuts)
+    y.hat[a] ~ dbeta(alpha[yearZ[a]],beta[yearZ[a]])T(1e-4,0.9999)
+    x2[a] ~ dcat(pi) # missing values for grazing info randomly assigned
+    x3[a] ~ dcat(pi) # PPP only
+    yOrig[a] ~ dunif(0,10) # PPP only
 }
 
 ### Priors ###
 ## Intercept for state model for occupancy
 mean.m ~ dbeta(1,1)T(1e-4,0.9999)
-for(j in 1:Y){
-  m[j] ~ dnorm(logit(mean.m), tau.m)
+m[1] ~ dnorm(logit(mean.m), tau0)
+tau0 <- 1/pow(sd0, 2)
+sd0 ~ dt(0, 1, 3)T(0,)
+for(j in 2:Y){
+  m[j] ~ dnorm(m[j-1], tau.m)T(logit(1e-4), logit(0.9999)) # fixing tau.m (e.g. at 4) results in much smoother trend
 }  
-tau.m <- 1/pow(sd.mA, 2)
-sd.mA <- sd.m #+ 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
-sd.m ~ dt(0, 0.001, 1)T(0,)
+tau.m <- 1/pow(sd.m, 2)
+sd.m ~ dt(0, 1, 3)T(0,)
 
-## Cover (with random walk prior)
-# mu and phi determine a and b parameters of beta distribution
-#phi[1] ~ dt(0, 0.01, 1)T(0,)
-phi[1] ~ dpar(1.5, 0.1) # alpha, c
-#mu[1] ~ dbeta(1, 1) 
-mu[1] ~ dbeta(1, 1)T(1e-4,0.9999) # PPP change
-for (j in 2:Y){
-  mInt[j] ~ dnorm(logit(mu[j-1]), 4)
-  mu[j] <- ilogit(mInt[j]) # mean follows low-variation random walk on logit-normal scale (sd = 0.5, so tau = 4)
-  #phi[j] ~ dt(0, 0.1, 1)T(0,) # phi's are independent half-Cauchy priors (make tau = 0.1 given likely values of a/b)
-  phi[j] ~ dpar(1.5, 0.1) # alpha, c
+## Cover (without random walk prior)
+#for (j in 1:Y){
+#phi[j] ~ dpar(1.5, 0.1) # alpha, c
+#mu[j] ~ dbeta(1, 1)T(1e-4,0.9999)
+#}
+#### for more precise random walk on cover scale, we would need to know how to transform phi onto the logit scale ####
+#
+for (j in 1:Y){
+phi[j] ~ dpar(1.5, 0.1) # alpha, c
 }
+mu[1] ~ dbeta(1, 1)T(1e-4,0.9999)
+for (j in 2:Y){
+  mu[j] <- ilogit(mInt[j]) # mean follows low-variation random walk on logit-normal scale (sd = 0.5, so tau = 4)
+  mInt[j] ~ dnorm(logit(mu[j-1]), tauC)T(logit(1e-4), logit(0.9999)) # fixing tauC (e.g. at 4) results in much smoother trend
+  #mInt[j] ~ dnorm(logit(mu[j-1]), 4)T(logit(1e-4), logit(0.9999)) # fixing tauC (e.g. at 4) results in much smoother trend
+}
+tauC <- 1/pow(sdC, 2)
+sdC ~ dt(0, 1, 3)T(0,) #-- weaker, density mostly -10 - 10
+#sdC ~ dt(0, 0.001, 1)T(0,) # bit too strong (see 7_PriorPredChecks.R script) -- normally most density -5 to 5
 
 ## Detection model
 mean.p ~ dbeta(1,1)T(1e-4,0.9999) # broad intercept on prob scale
 g0 <- logit(mean.p) # transformed # note that this requires tweak to initial values
-g1 ~ dunif(-5, 5)
+g1 ~ dnorm(0, 0.1)T(0,) # moderate belief that this parameter should be positive, increase in cover increases detectability, all else being equal
 
 # Hierarchical prior for levels of grazing
-for (j in 1:g2Levs) { g2[j] ~ dnorm(g2mu, g2tau) }
-mean.g2 ~ dbeta(1,1)T(1e-4,0.9999)
+for (j in 1:g2Levs) { g2[j] ~ dnorm(g2mu, g2tau) } # shouldn't there be a zeroth level here as well?
+mean.g2 ~ dbeta(1,1)T(1e-3,0.999) # between -7 and 7
 g2mu <- logit(mean.g2)
-g2tau <- 1/pow(sd.g2A, 2)
-#sd.g2A <- sd.g2 + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
-sd.g2A <- sd.g2
-sd.g2 ~ dt(0, 0.001, 1)T(0,)
+g2tau <- 1/pow(sd.g2, 2)
+sd.g2 ~ dt(0, 1, 3)T(0,)
 
 # Hierarchical prior for survey levels
 for (j in 1:g3Levs) { g3[j] ~ dnorm(g3mu, g3tau) }
-mean.g3 ~ dbeta(1,1)T(1e-4,0.9999)
+mean.g3 ~ dbeta(1,1)T(1e-3,0.999) # between 
 g3mu <- logit(mean.g3)
-g3tau <- 1/pow(sd.g3A, 2)
-#sd.g3A <- sd.g3 + 0.1 # see Kruschke page 486 (don't want shrinkage to be too strong when data sparse)
-sd.g3A <- sd.g3
-sd.g3 ~ dt(0, 0.001, 1)T(0,)
+g3tau <- 1/pow(sd.g3, 2)
+sd.g3 ~ dt(0, 1, 3)T(0,) # dt(mu,tau,k)
 
 } ## END MODEL
 ", fill = TRUE)
 sink()
 
-jagsModel <- jags.model(file= 'scripts/JAGS/JAGS_mod_PPP.txt', data = Data, inits = inits.fn, n.chains = 6, n.adapt= 1000)
+jagsModel <- jags.model(file= 'scripts/JAGS/JAGS_mod_PPP_v2.txt', data = Data, inits = inits.fn, n.chains = 6, n.adapt= 100)
 
 # Specify parameters for which posterior samples are saved
-para.names <- c('mC', 'mPsi', 'mu', 'annOcc', 'avgOcc', 'cPos')
+para.names <- c('mC', 'mPsi', 'mu', 'annOcc', 'avgOcc', 'cPos', 'g0', 'g1', 'g2', 'g3', 'alpha', 'beta')
 #para.names <- c('mC')
 # Continue the MCMC runs with sampling
-samples <- coda.samples(jagsModel, variable.names = para.names, thin = 10, n.iter = 5000)
+#jagsModel <- update(jagsModel, n.iter = 500)
+samples <- coda.samples(jagsModel, variable.names = para.names, thin = 5, n.iter = 1000)
 ## Inspect results
 out <- summary(samples)
 mu_se <- out$stat[,c(1,3)] #make columns for mean and se
@@ -475,6 +484,7 @@ hist(rnorm(n = 1000, mean = mU, sd = sD), breaks = 500)
 hist(log(rnorm(n = 1000, mean = mU, sd = sD)))
 hist(ilt(rnorm(n = 1000, mean = mU, sd = sD)))
 # pareto
+library(VGAM)
 sDp <- rpareto(1000, scale = 1.5, shape = 0.1) # scale = alpha, scale = k
 mUp <- logit(rbeta(1000,1,1))
 hist(rnorm(n = 1000, mean = mUp, sd = sDp))
