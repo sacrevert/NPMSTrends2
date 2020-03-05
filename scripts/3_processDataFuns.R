@@ -4,11 +4,11 @@
 # 17.08.2018
 #rm(list=ls())
 
-#source(file = "scripts/2_getDataFromIndiciaExec.R")
+source(file = "scripts/2_getDataFromIndiciaExec.R")
 ## Load data (previously extracted using functions in script 1)
 ## Or will be in the global environment if sourcing script "2_getData..."
-load(file = "data/npms_SamplesSpecies_2020-01-16.Rdata")
-load(file = "data/npms_PlotsSamples_2020-01-16.Rdata")
+load(file = "data/npms_SamplesSpecies_2020-03-04.Rdata")
+load(file = "data/npms_PlotsSamples_2020-03-04.Rdata")
 
 
 ## Read in the official list of indicators with indicia preferred names and TVKs
@@ -28,7 +28,11 @@ domins <- read.csv(file = "data/dominScores.csv", header = T, stringsAsFactors =
 ###########################################################################################################
 ### Note that this will need updating every year as new recorded names are added to the indicia export ####
 ###########################################################################################################
-unifyNames <- read.csv(file = "data/unifyNames.csv", header = T, stringsAsFactors = F)
+## Run the below periodically to add missing indicia names to unification table
+#checkMismatch <- merge(npms_spp, unifyNames, by.x = "preferred_taxon", by.y = "nameRec", all.x = T, all.y = T)
+#write.csv(checkMismatch[is.na(checkMismatch$UnifiedPlusInd),], file = paste("outputs/newUniSpRec_", as.character(Sys.Date()), ".csv", sep = ""))
+###
+unifyNames <- read.csv(file = "data/unifyNames.csv", header = T, stringsAsFactors = F)[,c(1:3)] # only read in the three relevant columns
 npms_spp <- merge(npms_spp, unifyNames, by.x = "preferred_taxon", by.y = "nameRec", all.x = T, all.y = F)
 
 ## Process fie/broad-scale indicator data for later function
@@ -77,9 +81,38 @@ names(mowDat)[6] <- "cutting"
 ##### within indicator taxa will be ignored. (03 01 2020: hang on, I did the unify names bit above, so this should be OK if that lookup list is up-to-date,
 ##### I think me from 03 09 2019 overlooked that step)
 
-## Grasslands examples
-grasslands <- c("Neutral pastures and meadows", "Dry acid grassland", "Dry calcareous grassland", "Neutral damp grassland", "Lowland grassland")
-grassSamples <- getSamples(habsList = grasslands)
+###################################################################
+##                                                               ##
+##              All broad habitat definitions here!              ##
+##                                                               ##
+###################################################################
+## Define all the broad habitats (and custom ones that we discussed at the BISG meeting)
+## and then put the getsamples into a loop or apply function that saves each set of samples to a list.
+lowGrass <- c("Neutral pastures and meadows", "Dry acid grassland", "Dry calcareous grassland", "Neutral damp grassland", "Lowland grassland")
+arable <- c("Arable margins","Arable field margins")
+bogWHeath <- c("Bog and wet heath", "Blanket bog", "Raised bog", "Wet heath")
+woodsEtc <- c("Broadleaved woodland, hedges and scrub", "Dry deciduous woodland", 
+              "Hedgerows of native species", "Wet woodland", "Broadleaved woodland")
+coast <- c("Coast", "Coastal saltmarsh", "Coastal sand dunes", "Coastal vegetated shingle", 
+           "Machair", "Maritime cliffs and slopes")
+freshwater <- c("Freshwater", "Nutrient-poor lakes and ponds", "Nutrient-rich lakes and ponds",
+                "Rivers and streams")
+heaths <- c("Heathland", "Dry heathland", "Montane dry heathland")
+marshFen <- c("Marsh and fen", "Acids fens", "Base-rich fens", "Acid fens, mires and springs",
+              "Base-rich fens, mires and springs")
+highGrass <- c("Upland grassland", "Montane acid grassland", "Montane calcareous grassland")
+pineWoods <- c("Native pinewood and juniper scrub", "Native conifer woods and juniper scrub")
+rocks <- c("Rock outcrops, cliffs and scree", "Inland rocks and scree", "Montane rocks and scree",
+           "Rock outcrops")
+habDefs <- list(lowGrass, arable, bogWHeath, woodsEtc, coast, freshwater, heaths, marshFen,
+                highGrass, pineWoods, rocks)
+###################################################################
+#grassSamples <- getSamples(habsList = lowGrass) # for one habitat
+allHabSamples <- list()
+for (i in 1:11){ # 11 broad habitats
+    allHabSamples[[i]] <- getSamples(habsList = habDefs[[i]])
+}
+names(allHabSamples) <- names(habDefs)
 #
 
 ## Then process the filtered data so that species abundance information is as it should be (i.e. present/absent/NA)
@@ -162,16 +195,21 @@ spSamplePA_v1.1 <- function(samples, species){ tryCatch(
     error = function(err) print(species) )
 }
 
+##################################################
 ## Let's see if it works! (looks ok - 05 09 2019)
-grasslands <- c("Neutral pastures and meadows", "Dry acid grassland", "Dry calcareous grassland", "Neutral damp grassland", "Lowland grassland")
-grassSamples <- getSamples(habsList = grasslands)
+##################################################
+#grasslands <- c("Neutral pastures and meadows", "Dry acid grassland", "Dry calcareous grassland", "Neutral damp grassland", "Lowland grassland")
+#grassSamples <- getSamples(habsList = grasslands)
+
 #samples = grassSamples; species = "Achillea millefolium"
 #samples = grassSamples; species = "Gymnadenia conopsea"
 #Achi_mill_PAN <- spSamplePA_v1.1(samples = grassSamples, species = "Achillea millefolium") # Seems good (now 3979 rows)
 #save(Achi_mill_PAN, file = paste("data/Achi_mille_grassSamples_", as.character(Sys.Date()), ".Rdata", sep = ""))
 #Gym_con_PAN <- spSamplePA_v1.1(samples = grassSamples, species = "Gymnadenia conopsea") # Seems good (now 3979 rows)
 #save(Gym_con_PAN, file = paste("data/Gymn_conop_grassSamples_", as.character(Sys.Date()), ".Rdata", sep = ""))
-Trif_camp_PAN <- spSamplePA_v1.1(samples = grassSamples, species = "Trifolium campestre") # Seems good (now 3979 rows)
-save(Trif_camp_PAN, file = paste("data/Trif_camp_grassSamples_", as.character(Sys.Date()), ".Rdata", sep = ""))
+
+#Trif_camp_PAN <- spSamplePA_v1.1(samples = grassSamples, species = "Trifolium campestre") # Seems good (now 3979 rows)
+#save(Trif_camp_PAN, file = paste("data/Trif_camp_grassSamples_", as.character(Sys.Date()), ".Rdata", sep = ""))
+
 #head(Achi_mill_PAN)
 #load(file = "data/Achi_mille_grassSamples_20180920.Rdata") # old data (trends proj 1) for comparison

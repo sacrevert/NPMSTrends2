@@ -33,20 +33,34 @@ source(file = "scripts/3_processDataFuns.R")
 ##############################################################
 ############ Generalised approach using functions ############
 ##############################################################
+#### hab samples now in allHabSamples list, see script 3 ####
 ## General habitats list
-habs <- read.csv( file = "data/NPMShabitats_Surv_to_Broad.csv", h = T, strings = F)
+#habs <- read.csv( file = "data/NPMShabitats_Surv_to_Broad.csv", h = T, strings = F)
 # bsh = broad scale habitat
-getSamps2 <- function(bsh) { getSamples(habsList = unique(habs[habs$NPMS.broad.habitat==bsh,2]))}
-habSamps <- getSamps2(bsh = "Lowland grassland") # includes relevant broad and fine scale habitat names
+#getSamps2 <- function(bsh) { getSamples(habsList = unique(habs[habs$NPMS.broad.habitat==bsh,2]))}
+bsh <- c("Lowland grassland", "Arable margins", "Bog and wet heath", "Broadleaved woodland, hedges and scrub", # same order as used for sample extraction
+         "Coast", "Freshwater", "Heathland",  "Marsh and fen", "Upland grassland",
+         "Native pinewood and juniper scrub", "Rock outcrops, cliffs and scree")
+#habSamps <- getSamps2(bsh = "Lowland grassland") # includes relevant broad and fine scale habitat names
 
 ## List of positive indicator species per fine habitat set (species subset = spp)
 inds <- read.csv(file = "data/npmsIndicatorsIndicia_Aug2018.csv", header = T, stringsAsFactors = F) # repeated from script 3
-selectSp <- function(bsh, sp) {tmp <- unique(inds[inds$broad.scale_habitat == bsh & inds$indicator_type == "positive",]$indiciaName)} 
+#
+selectSp <- function(bsh, type = "positive") {tmp <- unique(inds[inds$broad.scale_habitat == bsh & inds$indicator_type == type,]$indiciaName)} # type can also be "negative"
 # get species list for relevant broad habitat
-focalSpp <- list()
-focalSpp <- selectSp(bsh = "Lowland grassland")
+focalSpp_P <- list()
+for (i in 1:11){ 
+  focalSpp_P[[i]] <- selectSp(bsh = bsh[i])
+}
+
+# for negative indicators
+focalSpp_N <- list()
+for (i in 1:11){ 
+  focalSpp_N[[i]] <- selectSp(bsh = bsh[i], type = "negative")
+}
 
 sppDatList <- list()
+
 # Function will print names of error-causing species to screen
 # error causing species will currently just be a character element to the list, rather than a nested df
 sppDatList <- lapply(focalSpp, function(x) spSamplePA_v1.1(samples = habSamps, species = x)) # no data species are printed to screen
