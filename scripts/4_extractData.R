@@ -52,19 +52,44 @@ focalSpp_P <- list()
 for (i in 1:11){ 
   focalSpp_P[[i]] <- selectSp(bsh = bsh[i])
 }
+names(focalSpp_P) <- names(allHabSamples)
 
 # for negative indicators
 focalSpp_N <- list()
 for (i in 1:11){ 
   focalSpp_N[[i]] <- selectSp(bsh = bsh[i], type = "negative")
 }
+names(focalSpp_N) <- names(allHabSamples)
 
-sppDatList <- list()
+sppPerHabL_P <- list() # lists of samples for POSITIVE species per hab
+sppPerHabL_N <- list() # lists of samples for NEGATIVE species per hab
 
-# Function will print names of error-causing species to screen
 # error causing species will currently just be a character element to the list, rather than a nested df
-sppDatList <- lapply(focalSpp, function(x) spSamplePA_v1.1(samples = habSamps, species = x)) # no data species are printed to screen
-names(sppDatList) <- focalSpp
+# Function "spSamplePA_v1.1()" will print names of species with no data within a habitat to screen
+sppPerHabL_P <- lapply(seq_along(allHabSamples), 
+                        function(x) lapply(focalSpp_P[[x]], # Positive indicator species
+                                            function(z) spSamplePA_v1.1(samples = allHabSamples[[x]], species = z)
+                                           )
+                      )
+  
+sppPerHabL_N <- lapply(seq_along(allHabSamples), 
+                       function(x) lapply(focalSpp_N[[x]], # Negative indicator species
+                                          function(z) spSamplePA_v1.1(samples = allHabSamples[[x]], species = z)
+                       )
+)
+
+#save(sppPerHabL_P, file = "outputs/sppPerHabL_P_09032020.Rdata")
+#save(sppPerHabL_N, file = "outputs/sppPerHabL_N_09032020.Rdata")
+load(file = "outputs/sppPerHabL_P_09032020.Rdata")
+load(file = "outputs/sppPerHabL_N_09032020.Rdata")
+
+### PREVIOUS CODE FOR ONE HABITAT ###
+
+#sppDatList <- lapply(focalSpp, function(x) spSamplePA_v1.1(samples = habSamps, species = x)) # no data species are printed to screen
+#names(sppDatList) <- focalSpp
+########
+
+
 ## Species with no data for reference
 excludedSpp <- unlist(lapply(seq_along(sppDatList), function(i) ifelse(which(!is.data.frame(sppDatList[[i]]))==1, names(sppDatList)[i], NULL)))
 ##

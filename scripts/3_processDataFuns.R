@@ -4,7 +4,8 @@
 # 17.08.2018
 #rm(list=ls())
 
-source(file = "scripts/2_getDataFromIndiciaExec.R")
+#source(file = "scripts/2_getDataFromIndiciaExec.R")
+
 ## Load data (previously extracted using functions in script 1)
 ## Or will be in the global environment if sourcing script "2_getData..."
 load(file = "data/npms_SamplesSpecies_2020-03-04.Rdata")
@@ -106,6 +107,8 @@ rocks <- c("Rock outcrops, cliffs and scree", "Inland rocks and scree", "Montane
            "Rock outcrops")
 habDefs <- list(lowGrass, arable, bogWHeath, woodsEtc, coast, freshwater, heaths, marshFen,
                 highGrass, pineWoods, rocks)
+names(habDefs) <- c("lowGrass", "arable", "bogWHeath", "woodsEtc", "coast", "freshwater", "heaths", "marshFen",
+                    "highGrass", "pineWoods", "rocks")
 ###################################################################
 #grassSamples <- getSamples(habsList = lowGrass) # for one habitat
 allHabSamples <- list()
