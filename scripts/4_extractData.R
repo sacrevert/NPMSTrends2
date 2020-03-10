@@ -71,30 +71,48 @@ sppPerHabL_P <- lapply(seq_along(allHabSamples),
                                             function(z) spSamplePA_v1.1(samples = allHabSamples[[x]], species = z)
                                            )
                       )
-  
+names(sppPerHabL_P) <- names(allHabSamples)
+for (i in 1:11){
+  names(sppPerHabL_P[[i]]) <- focalSpp_P[[i]]
+}
+
 sppPerHabL_N <- lapply(seq_along(allHabSamples), 
                        function(x) lapply(focalSpp_N[[x]], # Negative indicator species
                                           function(z) spSamplePA_v1.1(samples = allHabSamples[[x]], species = z)
-                       )
-)
+                                          )
+                      )
+names(sppPerHabL_N) <- names(allHabSamples)
+for (i in 1:11){
+  names(sppPerHabL_N[[i]]) <- focalSpp_N[[i]]
+}
 
 #save(sppPerHabL_P, file = "outputs/sppPerHabL_P_09032020.Rdata")
 #save(sppPerHabL_N, file = "outputs/sppPerHabL_N_09032020.Rdata")
+#library(rlist)
+#summary(sppPerHabL_P)
 load(file = "outputs/sppPerHabL_P_09032020.Rdata")
 load(file = "outputs/sppPerHabL_N_09032020.Rdata")
 
-### PREVIOUS CODE FOR ONE HABITAT ###
+## Species with no data for reference
+sppHabsNoData <- data.frame(noData =   
+  unlist(
+    lapply(seq_along(sppPerHabL_P),
+         function(x) lapply(seq_along(focalSpp_P[[x]][]), 
+          function(i) ifelse(which(!is.data.frame(sppPerHabL_P[[x]][[i]]))==1, paste(names(focalSpp_P[x]), sep ="_", focalSpp_P[[x]][[i]]), NULL) 
+         )
+    )
+  )
+)
 
+### PREVIOUS CODE FOR ONE HABITAT ###
 #sppDatList <- lapply(focalSpp, function(x) spSamplePA_v1.1(samples = habSamps, species = x)) # no data species are printed to screen
 #names(sppDatList) <- focalSpp
-########
-
-
-## Species with no data for reference
-excludedSpp <- unlist(lapply(seq_along(sppDatList), function(i) ifelse(which(!is.data.frame(sppDatList[[i]]))==1, names(sppDatList)[i], NULL)))
+#excludedSppHab_P <- unlist(lapply(seq_along(sppDatList), function(i) ifelse(which(!is.data.frame(sppDatList[[i]]))==1, names(sppDatList)[i], NULL)))
+#excludedSppHab_N <- unlist(lapply(seq_along(sppDatList), function(i) ifelse(which(!is.data.frame(sppDatList[[i]]))==1, names(sppDatList)[i], NULL)))
 ##
+########
 # this now has cutting/mowing and grazing data, and is unified to indicator names
-save(sppDatList, excludedSpp, file = paste("outputs/grasslandsEg_", as.character(Sys.Date()), ".Rdata", sep = ""))
+#save(sppDatList, excludedSpp, file = paste("outputs/grasslandsEg_", as.character(Sys.Date()), ".Rdata", sep = ""))
 #load(file = "outputs/grasslandsEg_09 09 2019.Rdata")
 #load(file = "outputs/grasslandsEg_26 03 2019.Rdata") # previous run (first indicator project) for comparison
 #####
