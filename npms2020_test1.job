@@ -1,0 +1,63 @@
+#!/bin/sh
+
+# This example queue file is for R running parallel on 1 node (or more).
+# It uses 16 processors.
+#PBS -l nodes=1:ppn=16
+#PBS -l mem=120gb
+
+# Queue choices are: tg_workq, tg_short, standby, standby-8 use short queue for up to 3-4 days
+#PBS -q r630-longq
+
+# Request 3 minutes of walltime - time after which Cirrus kills it, always set to longer than you think it will take
+#PBS -l walltime=480:00:00
+
+# Email address of user
+#PBS -M olipes@ceh.ac.uk
+
+# Choose the name of your job
+#PBS -N npms2020_test1
+
+# Sets mailing options:
+#	a - send mail to user when job is aborted by batch system
+#	b - send mail to user when job begins execution
+#	e - send mail to user when job terminates
+#PBS -m abe
+
+# Change to directory where job was submitted - and this directory should also contain the R script
+cd $PBS_O_WORKDIR
+
+## Start Debug
+# Show details, especially nodes.
+# PBS_NODEFILE contains the names of assigned nodes
+# The results of most of the following commands appear in the error file
+# R errors appear in .Rout file
+echo "PBS Environment info:"
+echo "     PBS_O_HOST: $PBS_O_HOST"
+echo "     PBS_O_QUEUE: $PBS_O_QUEUE"
+echo "     PBS_O_SYSTEM: $PBS_O_SYSTEM"
+echo "     PBS_O_WORKDIR: $PBS_O_WORKDIR"
+echo "     PBS_ENVIRONMENT: $PBS_ENVIRONMENT"
+echo "     PBS_JOBID: $PBS_JOBID"
+echo "     PBS_JOBNAME: $PBS_JOBNAME"
+echo "     PBS_QUEUE: $PBS_QUEUE"
+echo ""
+## End Debug
+
+# Load the correct modules 
+module add shared torque maui R/3.3.3 openmpi/gcc/64
+module add JAG/current
+
+# List the modules you have loaded so you know what you are using
+module list
+
+# This line is optional and just prints out the date/time right before
+# the job begins. It can be commented out if you choose.
+echo "Job started at: `date '+%Y-%m-%d %T'`"
+
+# Invoke R with mpiexec; and disable OpenMPIs openib byte transport layer 
+# Use only 1 core for master process; Rmpi launches slaves on others
+mpiexec -np 1 --hostfile $PBS_NODEFILE R CMD BATCH $PBS_O_WORKDIR/5c_processDataForClusterTrendsFunction.R
+
+# This line is optional and just prints out the date/time right after
+#the job ends. It can be commented out if you choose.
+echo "Job ended at: `date '+%Y-%m-%d %T'`"

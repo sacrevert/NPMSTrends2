@@ -53,6 +53,7 @@ for (i in 1:11){
   focalSpp_P[[i]] <- selectSp(bsh = bsh[i])
 }
 names(focalSpp_P) <- names(allHabSamples)
+saveRDS(focalSpp_P, file = "data/focalSpp_P.Rdata", version = 2) # cluster compat.
 
 # for negative indicators
 focalSpp_N <- list()
@@ -60,6 +61,7 @@ for (i in 1:11){
   focalSpp_N[[i]] <- selectSp(bsh = bsh[i], type = "negative")
 }
 names(focalSpp_N) <- names(allHabSamples)
+saveRDS(focalSpp_N, file = "data/focalSpp_N.Rdata", version = 2) # cluster compat.
 
 sppPerHabL_P <- list() # lists of samples for POSITIVE species per hab
 sppPerHabL_N <- list() # lists of samples for NEGATIVE species per hab
@@ -86,12 +88,12 @@ for (i in 1:11){
   names(sppPerHabL_N[[i]]) <- focalSpp_N[[i]]
 }
 
-#save(sppPerHabL_P, file = "outputs/sppPerHabL_P_09032020.Rdata")
-#save(sppPerHabL_N, file = "outputs/sppPerHabL_N_09032020.Rdata")
+saveRDS(sppPerHabL_P, file = "data/sppPerHabL_P_09032020.Rdata", version = 2) # cluster compat.
+saveRDS(sppPerHabL_N, file = "data/sppPerHabL_N_09032020.Rdata", version = 2) # cluster compat.
 #library(rlist)
 #summary(sppPerHabL_P)
-load(file = "outputs/sppPerHabL_P_09032020.Rdata")
-load(file = "outputs/sppPerHabL_N_09032020.Rdata")
+load(file = "data/sppPerHabL_P_09032020.Rdata")
+load(file = "data/sppPerHabL_N_09032020.Rdata")
 
 ## Species with no data for reference
 sppHabsNoData <- data.frame(noData =   
@@ -101,9 +103,10 @@ sppHabsNoData <- data.frame(noData =
           function(i) ifelse(which(!is.data.frame(sppPerHabL_P[[x]][[i]]))==1, paste(names(focalSpp_P[x]), sep ="_", focalSpp_P[[x]][[i]]), NULL) 
          )
     )
-  )
+  ), stringsAsFactors = F
 )
-
+sppHabsNoData <- data.frame(do.call(rbind, strsplit(sppHabsNoData$noData, "_")), stringsAsFactors = F)
+names(sppHabsNoData) <- c("broadHab", "sp")
 ### PREVIOUS CODE FOR ONE HABITAT ###
 #sppDatList <- lapply(focalSpp, function(x) spSamplePA_v1.1(samples = habSamps, species = x)) # no data species are printed to screen
 #names(sppDatList) <- focalSpp
