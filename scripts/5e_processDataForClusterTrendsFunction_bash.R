@@ -46,7 +46,7 @@ source(file = "scripts/X2_sinkJAGSscript.R") # write JAGS model to disk
 source(file = "scripts/X3_sinkClusterFunction.R") # runModels_v5c_CLUS() function
 file = 'scripts/JAGS_mod4.3.txt'
 # Test
-#bHab <- "lowGrass"
+bHab <- "lowGrass"
 # Test
 sfExportAll()
 
@@ -59,9 +59,9 @@ sfExportAll()
 allPModels <- list()
 ptm <- proc.time()
 #allPModels <- lapply(seq_along(sppPerHabL_P[[1]]), # limit loop for testing
-allPModels <- sfLapply(focalSpp_P[[bHab]],
-#allPModels <- sfLapply(focalSpp_P[[bHab]][1:2], # Test
-                    function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_P[[bHab]][i], file = file, 
+#allPModels <- sfLapply(focalSpp_P[[bHab]],
+allPModels <- sfLapply(focalSpp_P[[bHab]][1:2], # Test
+                    function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_P[[bHab]][i], bHab = bHab, file = file, 
                                                    n.chains = 3, n.adapt = 10, n.iter = 100, thin = 1)
                     #function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_P[[bHab]][i], file = file)
                     )
@@ -69,7 +69,7 @@ Ptime <- (proc.time() - ptm); Ptime
 # Add names to both list levels for convenience
 #names(allPModels) <- focalSpp_P[[bHab]][1:2] # Test
 names(allPModels) <- focalSpp_P[[bHab]]
-save(allPModels, file = paste("outputs/allPModels_", bHab ,"_.Rdata", sep=""))
+#save(allPModels, file = paste("outputs/allPModels_", bHab ,"_.Rdata", sep=""))
 ###
 
 ### Apply JAGS model across broad habitats and **N** species (use sfLapply on cluster)
@@ -77,7 +77,7 @@ save(allPModels, file = paste("outputs/allPModels_", bHab ,"_.Rdata", sep=""))
 allNModels <- list()
 ptm <- proc.time()
 allNModels <- sfLapply(focalSpp_N[[bHab]],
-                       function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_N[[bHab]][i], file = file)
+                       function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_N[[bHab]][i], bHab = bHab, file = file)
 )
 Ntime <- (proc.time() - ptm); Ntime
 # Add names to both list levels for convenience
