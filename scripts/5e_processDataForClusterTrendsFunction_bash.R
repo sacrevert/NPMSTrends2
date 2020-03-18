@@ -14,14 +14,15 @@
 ######################################
 bHab <- commandArgs(trailingOnly = TRUE) # get broad habitat from command line
 ######################################
-setwd("/home/pywell/olipes/npms2020_test2/")
+#setwd("/home/pywell/olipes/npms2020_test2/")
 library(snowfall) # Use sfLapply( x, fun, ... )
 library(R2jags) ## requires that JAGS (preferably 4.3.0) is installed
 # Initialise a the cluster across Cirrus nodes
 # You do not need to edit these lines
-hosts<-as.character(read.table(Sys.getenv('PBS_NODEFILE'),header=FALSE)[,1]) # read the nodes to use
-sfSetMaxCPUs(length(hosts)) # ensure that snowfall can cope with this many hosts
-sfInit(parallel=TRUE,type="MPI",cpus=length(hosts),useRscript=TRUE) # initialise the connection
+sfInit(parallel=TRUE, cpus=4)#
+#hosts<-as.character(read.table(Sys.getenv('PBS_NODEFILE'),header=FALSE)[,1]) # read the nodes to use
+#sfSetMaxCPUs(length(hosts)) # ensure that snowfall can cope with this many hosts
+#sfInit(parallel=TRUE,type="MPI",cpus=length(hosts),useRscript=TRUE) # initialise the connection
 sfLibrary(R2jags)
 
 ######################################
@@ -44,6 +45,9 @@ domins <- read.csv(file = "data/dominScores.csv", header = T, stringsAsFactors =
 source(file = "scripts/X2_sinkJAGSscript.R") # write JAGS model to disk
 source(file = "scripts/X3_sinkClusterFunction.R") # runModels_v5c_CLUS() function
 file = 'scripts/JAGS_mod4.3.txt'
+# Test
+#bHab <- "lowGrass"
+# Test
 sfExportAll()
 
 ############################
@@ -51,15 +55,20 @@ sfExportAll()
 ############################
 ### Apply JAGS model across broad habitats and **P** species (use sfLapply on cluster)
 ### Positive indicators
+
 allPModels <- list()
 ptm <- proc.time()
 #allPModels <- lapply(seq_along(sppPerHabL_P[[1]]), # limit loop for testing
-allPModels <- sfLapply(focalSpp_P[bHab],
-                    function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_P[[bHab]][i], file = file)
+allPModels <- sfLapply(focalSpp_P[[bHab]],
+#allPModels <- sfLapply(focalSpp_P[[bHab]][1:2], # Test
+                    function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_P[[bHab]][i], file = file, 
+                                                   n.chains = 3, n.adapt = 10, n.iter = 100, thin = 1)
+                    #function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_P[[bHab]][i], file = file)
                     )
 Ptime <- (proc.time() - ptm); Ptime
 # Add names to both list levels for convenience
-names(allPModels) <- focalSpp_P[bHab]
+#names(allPModels) <- focalSpp_P[[bHab]][1:2] # Test
+names(allPModels) <- focalSpp_P[[bHab]]
 save(allPModels, file = paste("outputs/allPModels_", bHab ,"_.Rdata", sep=""))
 ###
 
@@ -67,12 +76,12 @@ save(allPModels, file = paste("outputs/allPModels_", bHab ,"_.Rdata", sep=""))
 ### Negative indicators
 allNModels <- list()
 ptm <- proc.time()
-allNModels <- sfLapply(focalSpp_N[bHab],
+allNModels <- sfLapply(focalSpp_N[[bHab]],
                        function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_N[[bHab]][i], file = file)
 )
 Ntime <- (proc.time() - ptm); Ntime
 # Add names to both list levels for convenience
-names(allNModels) <- focalSpp_N[bHab]
+names(allNModels) <- focalSpp_N[[bHab]]
 save(allNModels, file = paste("outputs/allNModels_", bHab, "_.Rdata", sep=""))
 ###
 sfStop()
