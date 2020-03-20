@@ -122,7 +122,7 @@ runModels_v5c_CLUS <- function(i, dat, file = file, bHab = bHab,
     #for ref only
     cPos.Init <- c(0.001,0.025,0.04,0.075,0.175,0.29,0.375,0.625,0.85,0.975,0.5)[spPos$dominUnify]
     ### MAKE SURE YOU HAVE GIVEN THE RIGHT MODEL SCRIPT TO THE FUNCTION ###
-    log <- file(paste("scripts/error_file_", i, "_", bHab, ".log", sep = ""), open = "wt")
+    log <- file(paste("logs/error_file_", i, "_", bHab, ".log", sep = ""), open = "wt")
     sink(log, append = TRUE, type = "message")
     jagsModel <- NULL
     attempt <- 0

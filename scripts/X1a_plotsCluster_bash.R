@@ -71,7 +71,7 @@ alphFocalSpp_N <- focalSpp_N[sort(names(focalSpp_N))]
 pPlots <- lapply(seq_along(allPOuts), # for each numbered broad hab
        function(x) { lapply(alphFocalSpp_P[[x]], 
        #function(x) { lapply(alphFocalSpp_P[[bHab]][1:2], # Test
-                            function(i) tryCatch( { mkPlot(spp = i, bHab = bHabNames[x], type = "P",
+                            function(i) tryCatch( { mkPlot(spp = i, bHab = bHabNames[x], type = "P", par = "mC",
                                                       dat = allPOuts[[x]][[i]], yrRange = c(2015:2019)) },
                                                   ## insert NULL if, for some reason, the JAGS model failed
                                                   error = function(err) NULL
@@ -92,7 +92,7 @@ for (i in 1:11){
 ### Create plots for N species ###
 nPlots <- lapply(seq_along(allNOuts), # for each numbered broad hab
        function(x) { lapply(alphFocalSpp_N[[x]], 
-                            function(i) tryCatch( { mkPlot(spp = i, bHab = bHabNames[x], type = "N",
+                            function(i) tryCatch( { mkPlot(spp = i, bHab = bHabNames[x], type = "N", par = "mC",
                                                     dat = allNOuts[[x]][[i]], yrRange = c(2015:2019)) },
                                                   ## insert NULL if, for some reason, the JAGS model failed
                                                   error = function(err) NULL
