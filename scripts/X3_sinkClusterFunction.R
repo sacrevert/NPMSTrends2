@@ -1,7 +1,7 @@
 #######################################################################################
 ## Function for preparing species datasets for the JAGS model and then running model ##
 #######################################################################################
-runModels_v5c_CLUS <- function(i, dat, file = file, bHab = bHab,
+runModels_v5c_CLUS <- function(i, dat, file = file, bHab = bHab, status = status, para.names = c('mC', 'mPsi', 'mu', 'annOcc', 'avgOcc'),
                                n.chains = 6, n.adapt = 100, n.iter = 5000, thin = 5){ #### PROBABLY NEED TO ALTER FILE LOCATION FOR CLUSTER ####
   x <- dat[[1]]
   #x <- (x %>% group_by(plot_id) %>% filter(any(!is.na(dominUnify))) %>% as.data.frame()) # added in v1: keep plots with at least one non NA only
@@ -122,34 +122,24 @@ runModels_v5c_CLUS <- function(i, dat, file = file, bHab = bHab,
     #for ref only
     cPos.Init <- c(0.001,0.025,0.04,0.075,0.175,0.29,0.375,0.625,0.85,0.975,0.5)[spPos$dominUnify]
     ### MAKE SURE YOU HAVE GIVEN THE RIGHT MODEL SCRIPT TO THE FUNCTION ###
-    log <- file(paste("logs/error_file_", i, "_", bHab, ".log", sep = ""), open = "wt")
+    log <- file(paste("logs/error_file_", i, "_", status, "_", bHab, ".log", sep = ""), open = "wt")
     sink(log, append = TRUE, type = "message")
-    jagsModel <- NULL
     attempt <- 0
-    while( is.null(jagsModel) && attempt <= 3 ) {
+    samples <- NULL
+    while( is.null(samples) && attempt <= 2 ) { # Wrap all of the JAGS-related model code in a try() statement
       attempt <- attempt + 1
       try( {jagsModel <- rjags::jags.model(file = file, data = Data, 
-                                       inits = inits.fn, n.chains = n.chains, n.adapt = n.adapt)}, 
-                     silent = F)
-      }
+                                       inits = inits.fn, n.chains = n.chains, n.adapt = n.adapt)
     ### MAKE SURE YOU HAVE THE RIGHT MODEL SCRIPT ###
     # Specify parameters for which posterior samples are saved
     #para.names <- c('psi')
-    para.names <- c('mC', 'mPsi', 'mu', 'annOcc', 'avgOcc')
+      para.names <- para.names # c('mC', 'mPsi', 'mu', 'annOcc', 'avgOcc')
     # Continue the MCMC runs with
-    attempt2 <- 0
-    while(attempt2 <= 3){
-      attempt2 <- attempt2 + 1
-      try( { update(jagsModel, n.iter = n.iter)}, # burn in!
+      update(jagsModel, n.iter = n.iter) # burn in!
+      samples <- rjags::coda.samples(jagsModel, variable.names = para.names, n.iter = n.iter, thin = thin)
+        },
         silent = F)
-    }
-    attempt3 <- 0
-    samples <- NULL
-    while( is.null(samples) && attempt3 <= 3 ) {
-      attempt3 <- attempt3 + 1
-      try ( {samples <- rjags::coda.samples(jagsModel, variable.names = para.names, n.iter = n.iter, thin = thin)},
-            silent = F)
-    }
+    } # End try statement
     sink(type = "message") ## sink any captured error messages to file
     ## Inspect results
     out <- summary(samples)

@@ -62,6 +62,8 @@ ptm <- proc.time()
 #allPModels <- sfLapply(focalSpp_P[[bHab]],
 allPModels <- sfLapply(focalSpp_P[[bHab]][1:2], # Test
                     function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_P[[bHab]][i], bHab = bHab, file = file, 
+                                                   status = "P",
+                                                   para.names = c('mC', 'mPsi', 'mu', 'annOcc', 'avgOcc'),
                                                    n.chains = 3, n.adapt = 10, n.iter = 100, thin = 1)
                     #function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_P[[bHab]][i], file = file)
                     )
@@ -77,7 +79,10 @@ names(allPModels) <- focalSpp_P[[bHab]]
 allNModels <- list()
 ptm <- proc.time()
 allNModels <- sfLapply(focalSpp_N[[bHab]],
-                       function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_N[[bHab]][i], bHab = bHab, file = file)
+                       function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_N[[bHab]][i], bHab = bHab, file = file, 
+                                                      status = "N",
+                                                      para.names = c('mC', 'mPsi', 'mu', 'annOcc', 'avgOcc'),
+                                                      n.chains = 3, n.adapt = 10, n.iter = 100, thin = 1)
 )
 Ntime <- (proc.time() - ptm); Ntime
 # Add names to both list levels for convenience

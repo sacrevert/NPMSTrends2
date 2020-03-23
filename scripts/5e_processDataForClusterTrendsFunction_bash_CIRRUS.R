@@ -55,8 +55,9 @@ allPModels <- list()
 ptm <- proc.time()
 #allPModels <- lapply(seq_along(sppPerHabL_P[[1]]), # limit loop for testing
 allPModels <- sfLapply(focalSpp_P[[bHab]],
-                    function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_P[[bHab]][i], file = file,
-                    n.chains = 6, n.adapt = 100, n.iter = 5000, thin = 5)
+                    function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_P[[bHab]][i], file = file, bHab = bHab,
+                      status = "P",
+                      n.chains = 6, n.adapt = 100, n.iter = 5000, thin = 5)
                     )
 Ptime <- (proc.time() - ptm); Ptime
 # Add names to both list levels for convenience
@@ -69,7 +70,9 @@ save(allPModels, file = paste("outputs/allPModels_", bHab ,"_.Rdata", sep=""))
 allNModels <- list()
 ptm <- proc.time()
 allNModels <- sfLapply(focalSpp_N[[bHab]],
-                       function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_N[[bHab]][i], file = file)
+                       function(i) runModels_v5c_CLUS(i = i, dat = sppPerHabL_N[[bHab]][i], file = file, bHab = bHab,
+                        status = "P",
+                        n.chains = 6, n.adapt = 100, n.iter = 5000, thin = 5)
 )
 Ntime <- (proc.time() - ptm); Ntime
 # Add names to both list levels for convenience
