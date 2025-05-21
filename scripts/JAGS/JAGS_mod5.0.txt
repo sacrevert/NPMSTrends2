@@ -58,7 +58,7 @@ for(j in 2:Y){
   m[j] ~ dnorm(alpha_m + rho_m * (m[j-1] - alpha_m), tau.m)T(logit(1e-5), logit(0.99999))
 }
 
-## Cover (with random walk prior)
+## Cover
 # AR(1) prior for cover mean on logit-scale (mInt)
 phi[1] ~ dpar(5, 0.5)
 mu[1] ~ dbeta(1, 1)T(1e-5,0.99999)
