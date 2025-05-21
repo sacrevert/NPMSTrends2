@@ -1,0 +1,98 @@
+
+model{
+for (j in 1:Y){ # years
+    # positive cover
+    alpha[j] <- mu[j] * phi[j]
+    beta[j] <- (1 - mu[j]) * phi[j]
+  for (i in 1:N){ # plots
+      # now draw a cover value *for each plot in each year*
+      cPos[i,j] ~ dbeta(alpha[j], beta[j]) T(1e-5,0.99999) 
+      
+      # ZI cover
+      C[i,j] <- z[i,j] * cPos[i,j] # combine random draw of cPos for year j with estimated plot-specific occupancy
+      
+      # occupancy
+      z[i,j] ~ dbern(psi[i,j]) # true PA state of a plot within a year depends on occupancy probability psi
+      logit(psi[i,j]) <- m[j] # year random intercept on occupancy prob
+      } # end of plots loop
+} # end of years loop
+
+## Derived values from state model
+for (j in 1:Y){ # number of years
+    annOcc[j] <- (sum(z[,j]))/N # annual occupancy
+    mC[j] <- mean(C[,j]) # annual mean cover, including zeros
+    mPsi[j] <- mean(psi[,j]) # annual mean occupancy prob
+}
+avgOcc <- mean(annOcc[]) # average annual occupancy
+
+## Plot positive covers
+for(k in 1:n.Plot.pos){ 
+    cposCens[k] ~ dinterval(cposLatent[k], lims[k,])
+    cposLatent[k] ~ dbeta(alpha[year[k]], beta[year[k]])T(1e-5,0.99999) # recorded cover when present follows beta distribution
+}
+
+## Observation model for all plot visits ([within-year] detection within plots)
+for (a in 1:V2){
+    y[a] ~ dbern(py[a]) # detectability influences detection
+    py[a] <- z[plotZ[a], yearZ[a]] * p.dec[a] # true state x detectability
+    p.dec[a] <- min(max(1e-5, p.Dec[a]), 0.99999) # trick to stop numerical problems
+    
+    # detectability model: g1 is cover effect, g2 is grazing effect (with missing values), g3 is survey level (no missing values)
+    logit(p.Dec[a]) <- g0 + g1*y.cov[a] + g2[x2[a]] + g3[x3[a]] 
+    y.cov[a] <- yOrig[a]*y.ind[a] + y.int[a]*(1-y.ind[a]) # y.cov is a combination of original Domin scores, and predicted Domin scores where NA
+    y.int[a] <- dinterval(y.hat[a], cuts)
+    y.hat[a] ~ dbeta(alpha[yearZ[a]],beta[yearZ[a]])T(1e-5,0.99999)
+}
+
+### Priors ###
+## Intercept for state model for occupancy
+# AR(1) prior for occupancy intercepts m[j]
+mean.m ~ dbeta(2, 18)T(1e-5,0.99999)       # prior for long-term mean occupancy
+alpha_m <- logit(mean.m)
+rho_m ~ dunif(0, 1)                     # AR(1) coefficient
+sd.m ~ dt(0, 1, 3)T(0,0.5)                # half-Student-t for innovation sd -- +/- 1 logit shifts les likely
+tau.m <- 1 / pow(sd.m, 2)
+
+m[1]    ~ dnorm(alpha_m, tau.m)T(logit(1e-5), logit(0.99999))
+for(j in 2:Y){
+  m[j] ~ dnorm(alpha_m + rho_m * (m[j-1] - alpha_m), tau.m)T(logit(1e-5), logit(0.99999))
+}
+
+## Cover (with random walk prior)
+# AR(1) prior for cover mean on logit-scale (mInt)
+phi[1] ~ dpar(5, 0.5)
+mu[1] ~ dbeta(1, 1)T(1e-5,0.99999)
+alpha_C <- logit(mu[1])
+rho_C ~ dunif(0, 1)
+sdC ~ dt(0, 0.5, 3)T(0,0.5) # half-Student-t for cover innovation sd
+tauC <- 1 / pow(sdC, 2)
+mInt[1] <- alpha_C
+for(j in 2:Y){
+  mInt[j] ~ dnorm(alpha_C + rho_C * (mInt[j-1] - alpha_C), tauC)T(logit(1e-5), logit(0.99999))
+  mu[j] <- ilogit(mInt[j])
+  phi[j] ~ dpar(5, 0.5)
+}
+
+## Detection model
+#mean.p ~ dbeta(1,1)T(1e-5,0.99999) # broad intercept on prob scale
+mean.p ~ dbeta(5, 5)T(1e-5,0.99999) # centres p around 0.5
+g0 <- logit(mean.p) # transformed # note that this requires tweak to initial values
+#g1 ~ dnorm(0, 0.1)T(0,) # moderate belief that this parameter should be positive, increase in cover increases detectability, all else being equal
+g1 ~ dnorm(1, 0.5)T(0,) # stronger belief in a positive, moderate-sized cover-detectability effect and prevents the model from wandering to very large or very small (near-zero) slopes.
+
+# Hierarchical prior for levels of grazing
+for (j in 1:g2Levs) { g2[j] ~ dnorm(g2mu, g2tau) }
+mean.g2 ~ dbeta(1,1)T(1e-5,0.99999) # make broader than 1e-3,0.999 because of occasional node inconsistent with parents JAGS error
+g2mu <- logit(mean.g2)
+g2tau <- 1/pow(sd.g2, 2)
+sd.g2 ~ dt(0, 1, 3)T(0,)
+
+# Hierarchical prior for survey levels
+for (j in 1:g3Levs) { g3[j] ~ dnorm(g3mu, g3tau) }
+mean.g3 ~ dbeta(1,1)T(1e-5,0.99999) # make broader than 1e-3,0.999 because of occasional node inconsistent with parents JAGS error 
+g3mu <- logit(mean.g3)
+g3tau <- 1/pow(sd.g3, 2)
+sd.g3 ~ dt(0, 1, 3)T(0,) # dt(mu,tau,k)
+
+} ## END MODEL
+
